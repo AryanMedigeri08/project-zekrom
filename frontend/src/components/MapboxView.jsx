@@ -1,5 +1,5 @@
 /**
- * MapboxView.jsx — Mission Control 3D View
+ * MapboxView.jsx — Professional Clean 3D View
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -8,12 +8,12 @@ import AIDecisionLog from './AIDecisionLog';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
-const BUS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#fff;width:20px;height:20px"><path d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-9.75a3.375 3.375 0 00-3.375-3.375h-9A3.375 3.375 0 005.25 7.875v6.375m13.5 4.5V7.875"/></svg>`;
+const BUS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:currentColor;width:20px;height:20px"><path d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-9.75a3.375 3.375 0 00-3.375-3.375h-9A3.375 3.375 0 005.25 7.875v6.375m13.5 4.5V7.875"/></svg>`;
 
 function getSignalColor(sig) {
-  if (sig > 70) return '#39ff14';
-  if (sig > 40) return '#f97316';
-  return '#ef4444';
+  if (sig >= 70) return '#10b981'; // Emerald
+  if (sig >= 40) return '#f59e0b'; // Amber
+  return '#ef4444'; // Rose
 }
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -27,11 +27,11 @@ function create3DMarkerElement(bus) {
   el.className = 'bus-marker-3d';
   const sigColor = getSignalColor(bus.signal_strength ?? 85);
   el.innerHTML = `
-    <div class="marker-body-3d" style="border-color: ${sigColor}; box-shadow: 0 0 15px ${sigColor}80">
-      <div class="marker-icon">${BUS_SVG}</div>
-      <div class="marker-label font-label-caps" style="color:${sigColor}">${bus.label || ''}</div>
+    <div class="marker-body-3d" style="border-color: ${sigColor}; box-shadow: 0 4px 10px rgba(0,0,0,0.1)">
+      <div class="marker-icon" style="color: ${sigColor}">${BUS_SVG}</div>
     </div>
-    <div class="pulse-3d" style="background: ${sigColor}20; border: 2px solid ${sigColor}"></div>
+    <div class="pulse-3d" style="background: ${sigColor}20;"></div>
+    <div class="marker-label" style="text-align: center; margin-top: 4px; font-weight: 700;">${bus.label || ''}</div>
   `;
   if (bus.is_ghost) el.classList.add('ghost-mode-3d');
   return el;
@@ -47,7 +47,7 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
   const [mapReady, setMapReady] = useState(false);
   const [tokenError, setTokenError] = useState(false);
 
-  const mapStyle = 'mapbox://styles/mapbox/dark-v11';
+  const mapStyle = 'mapbox://styles/mapbox/light-v11';
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) { setTokenError(true); return; }
@@ -80,7 +80,7 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
         id: '3d-buildings', source: 'composite', 'source-layer': 'building',
         filter: ['==', 'extrude', 'true'], type: 'fill-extrusion', minzoom: 14,
         paint: {
-          'fill-extrusion-color': '#0a0a0a',
+          'fill-extrusion-color': '#e2e8f0',
           'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 14, 0, 16, ['get', 'height']],
           'fill-extrusion-base': ['get', 'min_height'],
           'fill-extrusion-opacity': 0.8,
@@ -95,7 +95,7 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
         map.addLayer({
           id: 'route-line-3d', type: 'line', source: 'route-3d',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': routeColor || '#00f2ff', 'line-width': 5, 'line-opacity': 0.7 },
+          paint: { 'line-color': routeColor || '#6366f1', 'line-width': 6, 'line-opacity': 0.8 },
         });
       }
 
@@ -120,7 +120,7 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    try { if (map.getLayer('route-line-3d')) map.setPaintProperty('route-line-3d', 'line-color', routeColor || '#00f2ff'); } catch {}
+    try { if (map.getLayer('route-line-3d')) map.setPaintProperty('route-line-3d', 'line-color', routeColor || '#6366f1'); } catch {}
   }, [routeColor, mapReady]);
 
   useEffect(() => {
@@ -134,8 +134,10 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
       const sigColor = getSignalColor(bus.signal_strength ?? 85);
       const body = el.querySelector('.marker-body-3d');
       const pulse = el.querySelector('.pulse-3d');
-      if (body) { body.style.borderColor = sigColor; body.style.boxShadow = `0 0 15px ${sigColor}80`; }
-      if (pulse) { pulse.style.background = `${sigColor}20`; pulse.style.borderColor = sigColor; }
+      const icon = el.querySelector('.marker-icon');
+      if (body) { body.style.borderColor = sigColor; }
+      if (icon) { icon.style.color = sigColor; }
+      if (pulse) { pulse.style.background = `${sigColor}20`; }
       bus.is_ghost ? el.classList.add('ghost-mode-3d') : el.classList.remove('ghost-mode-3d');
     }
 
@@ -149,15 +151,15 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
 
   if (tokenError) {
     return (
-      <div className="glass-card" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="glass-card" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-card)' }}>
         <div style={{ textAlign: 'center' }}>
-          <p className="font-label-caps" style={{ color: 'var(--signal-amber)', fontSize: '14px', marginBottom: '8px' }}>3D VIEW UNAVAILABLE</p>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', fontFamily: 'Inter' }}>
+          <p style={{ color: 'var(--signal-amber)', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>3D VIEW UNAVAILABLE</p>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
             Add VITE_MAPBOX_TOKEN to <code>frontend/.env</code>
           </p>
-          <button onClick={onBack} className="font-label-caps glow-cyan" style={{
-            marginTop: '16px', padding: '8px 16px', borderRadius: '4px', border: '1px solid var(--signal-cyan)', cursor: 'pointer',
-            background: 'rgba(0,242,255,0.1)', color: 'var(--signal-cyan)', fontSize: '11px',
+          <button onClick={onBack} style={{
+            marginTop: '16px', padding: '8px 16px', borderRadius: '6px', border: '1px solid var(--color-border)', cursor: 'pointer',
+            background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: '12px', fontWeight: 600, boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
           }}>RETURN TO FLEET OVERVIEW</button>
         </div>
       </div>
@@ -171,49 +173,50 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', borderRadius: '12px', overflow: 'hidden' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--color-border)' }} />
 
       {/* Back button */}
-      <button onClick={onBack} className="font-label-caps" style={{
+      <button onClick={onBack} style={{
         position: 'absolute', top: '16px', left: '16px', zIndex: 50,
         display: 'flex', alignItems: 'center', gap: '8px',
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: `1px solid var(--color-border)`,
-        color: 'var(--color-text)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer',
-        fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+        background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--color-border-darker)', color: 'var(--color-text)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer',
+        fontSize: '12px', fontWeight: 600, transition: 'all 0.2s', boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
       }}>
-        ← FLEET OVERVIEW
+        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+        FLEET OVERVIEW
       </button>
 
       {/* Bus Info HUD */}
       <div className="glass-card" style={{
-        position: 'absolute', top: '16px', right: '16px', zIndex: 50, width: '280px',
-        padding: '16px',
+        position: 'absolute', top: '16px', right: '16px', zIndex: 50, width: '320px',
+        padding: '20px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: 'rgba(0,242,255,0.1)', border: '1px solid var(--signal-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(0,242,255,0.3)' }}>
-              <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--signal-cyan)' }}>BUS</span>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--signal-cyan)' }}>directions_bus</span>
             </div>
             <div>
-              <div className="font-data-display" style={{ fontSize: '18px', color: 'var(--color-text)' }}>{bus.label || bus.bus_id}</div>
-              <div className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{bus.route_name || bus.route_id}</div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>{bus.label || bus.bus_id}</div>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{bus.route_name || bus.route_id}</div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: bus.is_ghost ? 'var(--signal-amber)' : 'var(--signal-green)', animation: 'signal-blink 1.5s infinite', boxShadow: `0 0 8px ${bus.is_ghost?'var(--signal-amber)':'var(--signal-green)'}` }} />
-            <span className="font-label-caps" style={{ fontSize: '10px', color: bus.is_ghost ? 'var(--signal-amber)' : 'var(--signal-green)' }}>{bus.is_ghost ? 'EST' : 'LIVE'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', background: bus.is_ghost ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)', borderRadius: '6px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: bus.is_ghost ? 'var(--signal-amber)' : 'var(--signal-green)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: bus.is_ghost ? 'var(--signal-amber)' : 'var(--signal-green)' }}>{bus.is_ghost ? 'EST' : 'LIVE'}</span>
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <HudRow label="SPEED" value={`${bus.speed_kmh?.toFixed(1) ?? '—'} km/h`} />
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>SIGNAL</span>
-              <span className="font-data-display" style={{ fontSize: '14px', color: sigColor, textShadow: `0 0 8px ${sigColor}80` }}>{sigPct}%</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>SIGNAL</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: sigColor, fontVariantNumeric: 'tabular-nums' }}>{sigPct}%</span>
             </div>
-            <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', borderRadius: '2px', width: `${sigPct}%`, background: sigColor, transition: 'width 0.5s', boxShadow: `0 0 8px ${sigColor}` }} />
+            <div style={{ width: '100%', height: '6px', background: 'var(--color-border-darker)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: '3px', width: `${sigPct}%`, background: sigColor, transition: 'width 0.5s' }} />
             </div>
           </div>
           <HudRow label="TRAFFIC" value={trafficLabel.toUpperCase()} valueColor={trafficColor} />
@@ -222,19 +225,18 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
         </div>
 
         {bus.is_ghost && (
-          <div className="font-label-caps" style={{
-            marginTop: '12px', padding: '8px', borderRadius: '4px', textAlign: 'center',
-            background: 'rgba(249,115,22,0.1)', border: '1px solid var(--signal-amber)',
-            boxShadow: '0 0 15px rgba(249,115,22,0.3)'
+          <div style={{
+            marginTop: '16px', padding: '10px', borderRadius: '6px', textAlign: 'center',
+            background: 'rgba(245,158,11,0.05)', border: '1px solid var(--signal-amber)',
           }}>
-            <span style={{ fontSize: '11px', color: 'var(--signal-amber)', letterSpacing: '2px' }}>ESTIMATED POSITION</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--signal-amber)', letterSpacing: '0.05em' }}>ESTIMATED POSITION</span>
           </div>
         )}
       </div>
 
       {/* AI Decisions Panel — below HUD */}
-      <div className="glass-card" style={{
-        position: 'absolute', top: '380px', right: '16px', zIndex: 50, width: '300px',
+      <div style={{
+        position: 'absolute', top: '420px', right: '16px', zIndex: 50, width: '320px',
         maxHeight: '40vh', overflowY: 'auto', padding: 0
       }}>
         <AIDecisionLog busFilter={bus.bus_id || bus.id} />
@@ -246,8 +248,8 @@ export default function MapboxView({ bus, routeGeometry, routeColor, onBack }) {
 function HudRow({ label, value, valueColor }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{label}</span>
-      <span className="font-data-display" style={{ fontSize: '14px', color: valueColor || 'var(--color-text)' }}>{value}</span>
+      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>{label}</span>
+      <span style={{ fontSize: '14px', fontWeight: 600, color: valueColor || 'var(--color-text)' }}>{value}</span>
     </div>
   );
 }

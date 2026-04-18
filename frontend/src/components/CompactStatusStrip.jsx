@@ -5,15 +5,15 @@
 import React from 'react';
 
 function getSignalColor(sig) {
-  if (sig >= 70) return '#22c55e';
-  if (sig >= 40) return '#eab308';
-  return '#ef4444';
+  if (sig >= 70) return '#10b981'; // Emerald
+  if (sig >= 40) return '#f59e0b'; // Amber
+  return '#ef4444'; // Rose
 }
 
 function getTrafficColor(level) {
-  if (level === 'low') return '#22c55e';
-  if (level === 'high') return '#ef4444';
-  return '#eab308';
+  if (level === 'low') return '#10b981'; // Emerald
+  if (level === 'high') return '#ef4444'; // Rose
+  return '#f59e0b'; // Amber
 }
 
 export default function CompactStatusStrip({ bus }) {
@@ -30,8 +30,8 @@ export default function CompactStatusStrip({ bus }) {
     <div style={{
       flexShrink: 0, height: '48px', display: 'flex', alignItems: 'center', gap: '20px',
       padding: '0 20px', zIndex: 40,
-      background: 'var(--color-nav-bg)', borderTop: '1px solid var(--color-border)',
-      backdropFilter: 'blur(12px)',
+      background: 'rgba(255, 255, 255, 0.4)', borderTop: '1px solid var(--color-border)',
+      backdropFilter: 'blur(24px)',
     }}>
       {/* Bus label */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

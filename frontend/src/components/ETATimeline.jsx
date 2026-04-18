@@ -1,29 +1,26 @@
 /**
- * ETATimeline.jsx — Phase 6: Themed, larger fonts, per-bus tabs.
+ * ETATimeline.jsx — Professional Minimal Dashboard
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useTheme } from '../context/ThemeContext';
 
 const API_BASE = 'http://localhost:8000';
 
 const BUS_TABS = [
-  { id: 'bus_01', label: 'MIT-01', color: '#a855f7' },
-  { id: 'bus_02', label: 'HIN-02', color: '#14b8a6' },
-  { id: 'bus_03', label: 'HAD-03', color: '#f97316' },
-  { id: 'bus_04', label: 'KAT-04', color: '#ef4444' },
-  { id: 'bus_05', label: 'PUN-05', color: '#f59e0b' },
+  { id: 'bus_01', label: 'MIT-01', color: '#8b5cf6' },
+  { id: 'bus_02', label: 'HIN-02', color: '#0ea5e9' },
+  { id: 'bus_03', label: 'HAD-03', color: '#f59e0b' },
+  { id: 'bus_04', label: 'KAT-04', color: '#e11d48' },
+  { id: 'bus_05', label: 'PUN-05', color: '#10b981' },
 ];
 
 function getConeColor(width) {
-  if (width === 'narrow') return '#22c55e';
-  if (width === 'medium') return '#eab308';
-  return '#ef4444';
+  if (width === 'narrow') return '#10b981';
+  if (width === 'medium') return '#f59e0b';
+  return '#e11d48';
 }
 
 export default function ETATimeline({ buses, routes, simConfig }) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
   const [activeBusId, setActiveBusId] = useState('bus_01');
   const [etaData, setEtaData] = useState(null);
   const [tripStatus, setTripStatus] = useState(null);
@@ -89,30 +86,32 @@ export default function ETATimeline({ buses, routes, simConfig }) {
   const rangeHi = etaData?.arrival_range_high ?? '--:--';
   const penaltyApplied = etaData?.signal_penalty_applied ?? false;
 
-  const svgTextColor = isDark ? '#cbd5e1' : '#64748b';
-  const svgBgColor = isDark ? '#111' : '#f8fafc';
-  const lineColor = isDark ? '#333' : '#e2e8f0';
+  const svgTextColor = '#64748b';
+  const svgBgColor = 'rgba(255,255,255,0.4)';
+  const lineColor = '#cbd5e1';
 
   return (
-    <div className="zk-card" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%' }}>
+    <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
       {/* Bus tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingBottom: '6px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
         {BUS_TABS.map((tab) => (
           <button key={tab.id} onClick={() => setActiveBusId(tab.id)} style={{
-            padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
+            padding: '6px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
             border: `1px solid ${tab.id === activeBusId ? tab.color : 'var(--color-border)'}`,
-            background: tab.id === activeBusId ? `${tab.color}18` : 'transparent',
-            color: tab.id === activeBusId ? tab.color : 'var(--color-text-muted)',
+            background: tab.id === activeBusId ? `${tab.color}15` : 'rgba(255,255,255,0.5)',
+            color: tab.id === activeBusId ? tab.color : 'var(--color-text-secondary)',
             cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: tab.id === activeBusId ? 'none' : '0 1px 3px rgba(0,0,0,0.02)'
           }}>{tab.label}</button>
         ))}
       </div>
 
       {/* SVG Timeline */}
-      <div style={{ borderRadius: '8px', background: svgBgColor, border: `1px solid ${lineColor}`, overflow: 'hidden', minHeight: '130px' }}>
+      <div style={{ borderRadius: '10px', background: svgBgColor, border: `1px solid var(--color-border)`, overflow: 'hidden', minHeight: '130px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minHeight: '130px' }} preserveAspectRatio="xMidYMid meet">
-          <line x1={TL} y1={ROW1_Y} x2={TR} y2={ROW1_Y} stroke={lineColor} strokeWidth="3" strokeLinecap="round" />
-          <line x1={TL} y1={ROW1_Y} x2={busX} y2={ROW1_Y} stroke={tabColor} strokeWidth="3" strokeLinecap="round" strokeOpacity="0.6" />
+          <line x1={TL} y1={ROW1_Y} x2={TR} y2={ROW1_Y} stroke={lineColor} strokeWidth="4" strokeLinecap="round" />
+          <line x1={TL} y1={ROW1_Y} x2={busX} y2={ROW1_Y} stroke={tabColor} strokeWidth="4" strokeLinecap="round" />
 
           {stopXs.map((x, i) => {
             const isPassed = x <= busX;
@@ -120,57 +119,54 @@ export default function ETATimeline({ buses, routes, simConfig }) {
             return (
               <g key={i}>
                 <circle cx={x} cy={ROW1_Y} r={isTerminal ? 6 : 4}
-                  fill={isPassed ? tabColor : lineColor} stroke={isPassed ? tabColor : svgTextColor} strokeWidth="1.5" />
-                {i === 0 && <text x={x} y={ROW1_Y + 18} textAnchor="start" fill={svgTextColor} fontSize="9" fontWeight="500">{(stops[0]?.name || '').split(' ').slice(0, 2).join(' ')}</text>}
-                {i === totalStops - 1 && <text x={x} y={ROW1_Y + 18} textAnchor="end" fill="#6366f1" fontSize="9" fontWeight="700">MITAOE</text>}
+                  fill={isPassed ? tabColor : '#f8fafc'} stroke={isPassed ? tabColor : lineColor} strokeWidth="2" />
+                {i === 0 && <text x={x} y={ROW1_Y + 18} textAnchor="start" fill={svgTextColor} fontSize="10" fontWeight="600">{(stops[0]?.name || '').split(' ').slice(0, 2).join(' ')}</text>}
+                {i === totalStops - 1 && <text x={x} y={ROW1_Y + 18} textAnchor="end" fill={tabColor} fontSize="10" fontWeight="700">MITAOE</text>}
               </g>
             );
           })}
 
-          <g transform={`translate(${busX - 10}, ${ROW1_Y - 16})`}>
-            <rect x="0" y="0" width="20" height="14" rx="3" fill={tabColor} />
-            <rect x="2" y="2" width="5" height="4" rx="1" fill="white" opacity="0.8" />
-            <rect x="8" y="2" width="5" height="4" rx="1" fill="white" opacity="0.8" />
-            <rect x="14" y="2" width="4" height="4" rx="1" fill="white" opacity="0.8" />
-            <circle cx="5" cy="15" r="2" fill="#374151" /><circle cx="15" cy="15" r="2" fill="#374151" />
+          <g transform={`translate(${busX - 12}, ${ROW1_Y - 18})`}>
+            <rect x="0" y="0" width="24" height="16" rx="4" fill={tabColor} />
+            <circle cx="6" cy="18" r="2.5" fill="#334155" /><circle cx="18" cy="18" r="2.5" fill="#334155" />
           </g>
 
-          {busX < TR - 5 && <path d={conePath} fill={coneColor} fillOpacity="0.2" stroke={coneColor} strokeWidth="1" strokeOpacity="0.5" />}
+          {busX < TR - 5 && <path d={conePath} fill={coneColor} fillOpacity="0.1" stroke={coneColor} strokeWidth="1.5" strokeOpacity="0.3" strokeDasharray="4 4" />}
 
-          <rect x={TL} y={ROW2_Y - 4} width={Math.max(0, busX - TL)} height={8} rx={4} fill={tabColor} fillOpacity="0.35" />
+          <rect x={TL} y={ROW2_Y - 4} width={Math.max(0, busX - TL)} height={8} rx={4} fill={tabColor} fillOpacity="0.2" />
 
           {busX < TR - 5 && (
             <>
-              <text x={TR + 4} y={ROW2_Y - coneHalfWidth + 4} fill={coneColor} fontSize="9" fontWeight="600">{rangeLo}</text>
-              <text x={TR + 4} y={ROW2_Y + coneHalfWidth + 4} fill={coneColor} fontSize="9" fontWeight="600">{rangeHi}</text>
+              <text x={TR + 6} y={ROW2_Y - coneHalfWidth + 4} fill={coneColor} fontSize="10" fontWeight="600">{rangeLo}</text>
+              <text x={TR + 6} y={ROW2_Y + coneHalfWidth + 4} fill={coneColor} fontSize="10" fontWeight="600">{rangeHi}</text>
             </>
           )}
 
-          <text x={W / 2} y={H - 6} textAnchor="middle" fill={svgTextColor} fontSize="9" fontWeight="500">
+          <text x={W / 2} y={H - 6} textAnchor="middle" fill={svgTextColor} fontSize="10" fontWeight="600">
             Stop {(bus?.stop_index ?? 0) + 1}/{totalStops} — {(progress * 100).toFixed(0)}% complete
           </text>
         </svg>
       </div>
 
       {/* Info row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>ETA:</span>
-          <span style={{ fontWeight: 800, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>{arrival}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '13px', marginTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '11px' }}>ETA</span>
+          <span style={{ fontWeight: 800, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums', fontSize: '16px' }}>{arrival}</span>
         </div>
-        <span style={{ color: 'var(--color-border)' }}>|</span>
+        <span style={{ color: 'var(--color-border-darker)' }}>|</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Range:</span>
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: '12px' }}>Range:</span>
           <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{rangeLo} – {rangeHi}</span>
         </div>
-        <span style={{ color: 'var(--color-border)' }}>|</span>
+        <span style={{ color: 'var(--color-border-darker)' }}>|</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Confidence:</span>
-          <span style={{ fontWeight: 700, color: coneColor }}>{coneW}</span>
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: '12px' }}>Confidence:</span>
+          <span style={{ fontWeight: 700, color: coneColor }}>{coneW.toUpperCase()}</span>
         </div>
-        <span style={{ color: 'var(--color-border)' }}>|</span>
+        <span style={{ color: 'var(--color-border-darker)' }}>|</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Penalty:</span>
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: '12px' }}>Penalty:</span>
           <span style={{ fontWeight: 600, color: penaltyApplied ? '#ef4444' : 'var(--color-text-muted)' }}>
             {penaltyApplied ? 'Applied' : 'None'}
           </span>

@@ -36,14 +36,14 @@ const themes = {
 };
 
 const ThemeContext = createContext({
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () => {},
-  colors: themes.dark,
+  colors: themes.light,
 });
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('zekrom-theme') || 'dark'; } catch { return 'dark'; }
+    try { return localStorage.getItem('zekrom-theme') || 'light'; } catch { return 'light'; }
   });
 
   useEffect(() => {

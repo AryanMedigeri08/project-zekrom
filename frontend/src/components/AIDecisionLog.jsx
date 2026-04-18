@@ -1,5 +1,5 @@
 /**
- * AIDecisionLog.jsx — Mission Control System Intel Panel
+ * AIDecisionLog.jsx — Professional Clean System Intel
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -15,12 +15,12 @@ const BORDER_COLORS = {
   'Dead Zone Entry': 'var(--signal-red)',
 };
 
-const BG_DARK = {
-  'Ghost Bus Activated': 'rgba(249,115,22,0.1)',
-  'Buffer Flush Executed': 'rgba(57,255,20,0.1)',
-  'Ping Interval Adjusted': 'rgba(0,242,255,0.1)',
-  'ETA Recalculated': 'rgba(0,242,255,0.1)',
-  'Dead Zone Entry': 'rgba(239,68,68,0.1)',
+const BG_COLORS = {
+  'Ghost Bus Activated': 'rgba(245,158,11,0.05)',
+  'Buffer Flush Executed': 'rgba(16,185,129,0.05)',
+  'Ping Interval Adjusted': 'rgba(99,102,241,0.05)',
+  'ETA Recalculated': 'rgba(99,102,241,0.05)',
+  'Dead Zone Entry': 'rgba(239,68,68,0.05)',
 };
 
 function isRecent(timestamp) {
@@ -84,30 +84,30 @@ export default function AIDecisionLog({ busFilter }) {
   }
 
   return (
-    <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden' }}>
+    <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingBottom: '8px', borderBottom: '1px solid rgba(0,242,255,0.2)',
+        paddingBottom: '12px', borderBottom: '1px solid var(--color-border)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="font-label-caps" style={{ fontSize: '14px', color: 'var(--signal-cyan)', textShadow: '0 0 8px rgba(0,242,255,0.4)' }}>SYSTEM INTEL</span>
-          <span className="font-data-display" style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>[{display.length}]</span>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>System Intel</span>
+          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-muted)' }}>[{display.length}]</span>
         </div>
-        <button onClick={() => setSortAsc(!sortAsc)} className="font-label-caps" style={{
-          fontSize: '10px', padding: '4px 8px', borderRadius: '4px',
+        <button onClick={() => setSortAsc(!sortAsc)} style={{
+          fontSize: '11px', fontWeight: 600, padding: '6px 12px', borderRadius: '6px',
           border: '1px solid var(--color-border)', cursor: 'pointer',
-          background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-secondary)',
-          transition: 'all 0.2s',
+          background: 'rgba(255,255,255,0.5)', color: 'var(--color-text-secondary)',
+          transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
         }}>
           {sortAsc ? 'CHRONOLOGICAL' : 'REVERSE CHRONO'}
         </button>
       </div>
 
       {/* Entries */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
         {display.length === 0 && (
-          <p className="font-label-caps" style={{ fontSize: '11px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>
+          <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-muted)', textAlign: 'center', padding: '30px 0' }}>
             {busFilter ? `AWAITING TELEMETRY...` : 'STANDBY MODE'}
           </p>
         )}
@@ -115,60 +115,62 @@ export default function AIDecisionLog({ busFilter }) {
           const exp = entry.explanation || {};
           const decision = exp.decision || entry.message || '';
           const bColor = BORDER_COLORS[decision] || 'var(--color-border)';
-          const bgColor = BG_DARK[decision] || 'rgba(255,255,255,0.02)';
+          const bgColor = BG_COLORS[decision] || 'var(--color-bg-card)';
           const isExpanded = expandedIdx === i;
           const recent = isRecent(entry.timestamp);
 
           return (
             <div key={i} className="glass-card" style={{
-              borderLeft: `2px solid ${bColor}`,
-              borderRight: 'none', borderTop: 'none', borderBottom: 'none',
+              borderLeft: `4px solid ${bColor}`,
+              borderRight: '1px solid var(--color-border)',
+              borderTop: '1px solid var(--color-border)',
+              borderBottom: '1px solid var(--color-border)',
               background: bgColor,
-              padding: '10px 12px',
+              padding: '16px',
               transition: 'all 0.2s',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
             }}>
               {/* Header row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span className="font-data-display" style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{entry.timestamp}</span>
-                <span className="font-label-caps" style={{ fontSize: '11px', color: bColor, textShadow: `0 0 8px ${bColor}80` }}>{decision}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <span className="font-data-display" style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>{entry.timestamp}</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: bColor === 'var(--color-border)' ? 'var(--color-text)' : bColor }}>{decision}</span>
                 {exp.bus_id && (
-                  <span className="font-data-display" style={{
-                    fontSize: '11px', padding: '2px 6px', borderRadius: '2px',
-                    background: 'rgba(0,0,0,0.4)', color: 'var(--color-text-secondary)',
-                    border: '1px solid rgba(255,255,255,0.1)'
+                  <span style={{
+                    fontSize: '11px', fontWeight: 600, padding: '4px 8px', borderRadius: '6px',
+                    background: 'var(--color-border-darker)', color: 'var(--color-text-secondary)',
                   }}>{exp.bus_id.replace('bus_0', '').replace('bus_', '')}</span>
                 )}
-                {recent && <span className="font-label-caps" style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '2px', background: 'var(--signal-amber)', color: '#000', boxShadow: '0 0 8px rgba(249,115,22,0.8)', animation: 'signal-blink 1s infinite' }}>NEW</span>}
+                {recent && <span style={{ fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'var(--signal-amber)', color: '#fff' }}>NEW</span>}
               </div>
 
               {/* Trigger */}
               {exp.trigger && (
-                <p className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>TRIGGER: <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'Inter', textTransform: 'none' }}>{exp.trigger}</span></p>
+                <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>TRIGGER: <span style={{ color: 'var(--color-text)', fontWeight: 400 }}>{exp.trigger}</span></p>
               )}
 
               {/* Expand toggle */}
-              <button onClick={() => setExpandedIdx(isExpanded ? null : i)} className="font-label-caps glow-cyan" style={{
-                fontSize: '10px', color: 'var(--signal-cyan)', marginTop: '8px',
-                background: 'rgba(0,242,255,0.1)', border: '1px solid var(--signal-cyan)', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px'
+              <button onClick={() => setExpandedIdx(isExpanded ? null : i)} style={{
+                fontSize: '11px', fontWeight: 600, color: 'var(--signal-cyan)', marginTop: '12px',
+                background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', cursor: 'pointer', padding: '6px 12px', borderRadius: '6px',
+                transition: 'all 0.2s'
               }}>
-                {isExpanded ? 'CLOSE LOG' : 'VIEW LOG'}
+                {isExpanded ? 'CLOSE LOG' : 'VIEW DETAILED LOG'}
               </button>
 
               {/* Expanded reasoning */}
               {isExpanded && (
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${bColor}40` }}>
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid var(--color-border)` }}>
                   {exp.reasoning && (
-                    <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 10px', fontFamily: 'Inter' }}>{exp.reasoning}</p>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>{exp.reasoning}</p>
                   )}
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {exp.confidence != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>CONFIDENCE</span>
-                        <div style={{ width: '80px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Confidence</span>
+                        <div style={{ width: '100px', height: '6px', background: 'var(--color-border-darker)', borderRadius: '3px', overflow: 'hidden' }}>
                           <div style={{
-                            height: '100%', borderRadius: '2px', width: `${Math.round(exp.confidence * 100)}%`,
+                            height: '100%', borderRadius: '3px', width: `${Math.round(exp.confidence * 100)}%`,
                             background: exp.confidence >= 0.75 ? 'var(--signal-green)' : exp.confidence >= 0.5 ? 'var(--signal-amber)' : 'var(--signal-red)',
-                            boxShadow: `0 0 8px ${exp.confidence >= 0.75 ? 'var(--signal-green)' : exp.confidence >= 0.5 ? 'var(--signal-amber)' : 'var(--signal-red)'}`
                           }} />
                         </div>
                         <span className="font-data-display" style={{
@@ -178,14 +180,14 @@ export default function AIDecisionLog({ busFilter }) {
                       </div>
                     )}
                     {exp.expected_duration && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>DURATION</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Duration</span>
                         <span className="font-data-display" style={{ fontSize: '14px', color: 'var(--color-text)' }}>{exp.expected_duration}</span>
                       </div>
                     )}
                   </div>
                   {exp.action && (
-                    <p className="font-label-caps" style={{ fontSize: '10px', color: 'var(--signal-cyan)', margin: '8px 0 0' }}>EXEC: <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'Inter', textTransform: 'none' }}>{exp.action}</span></p>
+                    <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--signal-cyan)', margin: '16px 0 0' }}>EXEC: <span style={{ color: 'var(--color-text)', fontWeight: 400 }}>{exp.action}</span></p>
                   )}
                 </div>
               )}

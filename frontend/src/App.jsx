@@ -51,7 +51,22 @@ export default function App() {
     <div style={{
       height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column',
       overflow: 'hidden', background: 'var(--color-bg)', color: 'var(--color-text)',
+      position: 'relative',
     }}>
+      {/* Decorative ambient backdrop for Glassmorphic effect */}
+      <div style={{
+        position: 'absolute', top: '-10%', left: '-10%', width: '40vw', height: '40vw',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, rgba(99,102,241,0) 70%)',
+        filter: 'blur(60px)', zIndex: 0, pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-20%', right: '-10%', width: '60vw', height: '50vw',
+        background: 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0) 70%)',
+        filter: 'blur(80px)', zIndex: 0, pointerEvents: 'none',
+      }} />
+      
+      {/* Wrapper to overlay content above background */}
+      <div style={{ zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
       {/* Transition Overlay */}
       {showOverlay && <TransitionOverlay direction={overlayDirection} busLabel={selectedBus?.label} />}
 
@@ -136,6 +151,7 @@ export default function App() {
           />
         </main>
       )}
+      </div>
     </div>
   );
 }

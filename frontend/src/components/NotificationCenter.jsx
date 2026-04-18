@@ -63,7 +63,6 @@ export default function NotificationCenter() {
   if (!isOpen) return null;
 
   const filtered = filterNotifications(notifications, filter);
-  const isDark = theme === 'dark';
 
   return (
     <div className="notif-drawer" style={{
@@ -74,11 +73,13 @@ export default function NotificationCenter() {
       maxHeight: '60vh',
       overflowY: 'auto',
       zIndex: 1000,
-      background: isDark ? 'var(--color-bg-secondary)' : 'var(--color-bg-card)',
+      background: 'var(--color-bg-card)',
       borderLeft: '1px solid var(--color-border)',
       borderBottom: '1px solid var(--color-border)',
-      boxShadow: isDark ? '-4px 4px 20px rgba(0,0,0,0.5)' : '-4px 4px 20px rgba(0,0,0,0.1)',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
       animation: 'slideDown 250ms ease-out',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
     }}>
       {/* Header */}
       <div style={{
@@ -113,7 +114,7 @@ export default function NotificationCenter() {
             fontSize: '12px', fontWeight: 600, padding: '4px 10px',
             borderRadius: '6px', border: '1px solid',
             borderColor: filter === tab.id ? '#6366f1' : 'var(--color-border)',
-            background: filter === tab.id ? (isDark ? '#1e1b4b' : '#eef2ff') : 'transparent',
+            background: filter === tab.id ? '#eef2ff' : 'transparent',
             color: filter === tab.id ? '#6366f1' : 'var(--color-text-secondary)',
             cursor: 'pointer',
           }}>
@@ -151,7 +152,7 @@ export default function NotificationCenter() {
                 {n.busLabel && (
                   <span style={{
                     fontSize: '11px', fontWeight: 700, padding: '1px 6px',
-                    borderRadius: '4px', background: isDark ? '#1e293b' : '#e2e8f0',
+                    borderRadius: '4px', background: '#e2e8f0',
                     color: 'var(--color-text-secondary)',
                   }}>{n.busLabel}</span>
                 )}
