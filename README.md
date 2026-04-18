@@ -1,6 +1,6 @@
 # ⚡ Zekrom — Resilient Fleet Monitor
 
-> Real-time college bus tracking that works reliably under low bandwidth, high latency, and complete signal loss.
+> Real-time college bus tracking that works reliably under low bandwidth, high latency, and complete signal loss — with full transparency into every internal decision.
 
 ---
 
@@ -9,9 +9,9 @@
 ```
 project-zekrom/
 ├── backend/
-│   ├── main.py                         # Zekrom API (FastAPI + WebSocket)
+│   ├── main.py                         # Zekrom API (FastAPI + WebSocket + Layer Status)
 │   ├── config.py                       # 5 routes, 5 buses, MITAOE destination
-│   ├── gps_emitter.py                  # Multi-bus GPS simulation + ghost logic
+│   ├── gps_emitter.py                  # Multi-bus GPS simulation + 6-layer telemetry
 │   ├── dead_zones.py                   # Dead zone definitions + helpers
 │   ├── explainer.py                    # AI Decision Explainability engine
 │   ├── buffer.py                       # Store-and-forward ping buffer
@@ -33,27 +33,38 @@ project-zekrom/
     ├── .env                            # VITE_MAPBOX_TOKEN (optional, for 3D)
     └── src/
         ├── main.jsx                    # Entry — ThemeProvider + NotificationProvider
-        ├── index.css                   # Full theme system (dark/light CSS vars)
+        ├── index.css                   # Logista Slate design system (light mode)
         ├── App.jsx                     # Layout: Header → NetworkStrip → Tabs
         ├── context/
-        │   ├── ThemeContext.jsx         # Light/Dark mode system
+        │   ├── ThemeContext.jsx         # Locked to light mode
         │   └── NotificationContext.jsx  # Global notification state
         ├── components/
-        │   ├── Header.jsx              # ⚡ Zekrom, tab switcher, bell, theme
+        │   ├── Header.jsx              # ⚡ Zekrom, tab switcher, bell
         │   ├── NetworkStrip.jsx        # Horizontal health strip (all 5 buses)
         │   ├── NotificationCenter.jsx  # Collapsible notification drawer
         │   ├── MapView.jsx             # Leaflet 2D map (prop-driven, mapId)
         │   ├── MapboxView.jsx          # Mapbox 3D view + inline AI panel
         │   ├── BusSidebar.jsx          # Priority-sorted bus cards
         │   ├── ETATimeline.jsx         # SVG confidence cone timeline
-        │   ├── AIDecisionLog.jsx       # Newest-first AI decisions + NEW badge
-        │   ├── SimulationDashboard.jsx # Full Simulation Lab (70:30 map+controls)
+        │   ├── AIDecisionLog.jsx       # AI decisions (mode-aware: live/sim)
+        │   ├── SimulationDashboard.jsx # Simulation Lab (scrollable layout)
+        │   ├── LayerActivityMonitor.jsx # Layer Activity Monitor container
         │   ├── NetworkPanel.jsx        # (legacy, replaced by NetworkStrip)
         │   ├── MapLegend.jsx           # Leaflet legend control
         │   ├── CompactStatusStrip.jsx  # Bottom bar in 3D mode
-        │   └── TransitionOverlay.jsx   # 2D↔3D transition animation
+        │   ├── TransitionOverlay.jsx   # 2D↔3D transition animation
+        │   └── layers/
+        │       ├── Layer1Card.jsx      # Adaptive Payload & Frequency
+        │       ├── Layer2Card.jsx      # Store & Forward Buffer
+        │       ├── Layer3Card.jsx      # Ghost Bus Extrapolation
+        │       ├── Layer4Card.jsx      # ML ETA Prediction Engine
+        │       ├── Layer5Card.jsx      # Dead Zone Pre-awareness
+        │       ├── Layer6Card.jsx      # WebSocket Connection Resilience
+        │       ├── LayerCascadeFlow.jsx # SVG inter-layer cascade diagram
+        │       └── LayerAIExplanation.jsx # Shared AI explanation panel
         └── hooks/
-            ├── useWebSocket.js         # WS hook + notification callbacks
+            ├── useWebSocket.js         # WS hook + 6-layer telemetry ingestion
+            ├── useLayerActivity.js      # Layer state computation hook
             ├── useInterpolation.js     # Smooth marker animation
             ├── useSimConfig.js         # Simulation state management
             └── useMapMode.js           # 2D/3D mode switching
@@ -68,6 +79,8 @@ project-zekrom/
 - **Node.js 18+** with npm
 - A modern browser (Chrome/Edge recommended)
 - **Optional:** Mapbox token for 3D view
+
+> ⚠️ If using Conda, run `conda deactivate` before starting the dev server.
 
 ### Step 1: Backend Setup
 
@@ -107,44 +120,115 @@ The app opens at **http://localhost:5173**
 
 ---
 
-## ⚡ Phase 6 Features
+## 🏛️ Architecture Overview
 
-### Zekrom Branding
-- All references rebranded to "Zekrom"
-- ⚡ emoji favicon, Zekrom API v6.0.0 backend
+### 6-Layer Resilience Architecture
 
-### Dark / Light Mode
-- Full theme system with CSS variables
-- Toggle via ☀️/🌑 button in header
-- Auto-persists to localStorage
-- Mapbox tiles switch between dark-v11 / light-v11
-- Leaflet tiles switch between CARTO dark / voyager
+Zekrom's core innovation is a **6-layer resilience stack** that activates autonomously based on real-time conditions:
 
-### Notification Center
-- 🔔 bell with unread badge in header
-- Collapsible drawer with filter tabs (All / AI / System / Alerts)
-- Auto-populates from WebSocket events + AI decisions
-- Mark read / Clear all controls
+| Layer | Name | Trigger | Color |
+|-------|------|---------|-------|
+| **L1** | Adaptive Payload & Frequency | Signal delta > 15%, packet loss > 20% | 🔵 Blue `#3b82f6` |
+| **L2** | Store & Forward Buffer | Signal < 10%, buffer fills | 🟢 Teal `#14b8a6` |
+| **L3** | Ghost Bus Extrapolation | Real signal lost | 🟣 Purple `#8b5cf6` |
+| **L4** | ML ETA Prediction Engine | Ghost active, ETA recalculated | 🟡 Amber `#f59e0b` |
+| **L5** | Dead Zone Pre-awareness | Approaching known dead zone | 🟣 Deep Purple `#7c3aed` |
+| **L6** | WebSocket Connection Resilience | Latency > 200ms, reconnecting | 🟢 Green `#22c55e` |
 
-### Network Health Strip
-- Persistent strip below navbar showing all 5 buses inline
-- Mini sparkline + signal % or ghost indicator per bus
-- Always visible across all tabs and modes
+### Layer Cascade Scenarios
 
-### 70:30 Layout
-- Map takes 70% width, sidebar takes 30%
-- Applies to both Live Map and Simulation Lab
-- Map fills full available height (no aspect-ratio constraint)
+| Scenario | Cascade Path | Description |
+|----------|-------------|-------------|
+| **Rush Hour** | L4 → L1 | ETA recalculates for traffic, ping frequency adapts |
+| **Dead Zone** | L5 → L3 → L2 → L1 | Pre-awareness fires, ghost activates, buffer engages, payload compresses |
+| **Recovery** | L2 → L3 → L4 → L6 | Buffer flushes, ghost reconciles, ETA stabilizes, connection resumes |
+| **Storm** | All Layers | Full system stress, every layer engages simultaneously |
 
-### Simulation Lab — Full Map Parity
-- Same MapView used in both Live and Simulation tabs
-- All 13 visual features work in sim map (bus icons, dead zones, trails, etc.)
-- "⚡ SIMULATION MODE" badge + live parameter readout overlay
+### Data Flow
+```
+GPS Emitter (5 buses, background tasks)
+    │
+    ├─ Every 0.5s: advance bus physics
+    ├─ Dead zone detection + ghost activation
+    ├─ AI Explainability engine logs decisions
+    │
+    ├─ Per-ping telemetry (~30 fields):
+    │   ├─ Core: lat, lng, speed, heading, signal
+    │   ├─ L1: payload_size, ping_interval, bandwidth_saved
+    │   ├─ L2: buffer_count, is_flushing, flush_progress
+    │   ├─ L3: ghost_confidence, confidence_history, deviation
+    │   ├─ L4: eta_data_mode, eta_cone_width, eta_confidence
+    │   ├─ L5: approaching_dead_zone, distance_km, zone_progress
+    │   └─ L6: ws_latency, missed_pings, reconnect_attempt
+    │
+    ├─ Based on signal_strength:
+    │   ├─ ≥70%: emit every 2s (full payload, ~400B)
+    │   ├─ 40–70%: emit every 6s (compressed, ~180B)
+    │   ├─ 10–40%: emit every 12s (minimal, ~64B)
+    │   └─ <10%: buffer pings (dead zone, ~38B ghost)
+    │
+    └─ WebSocket broadcast → all frontend clients
+```
 
-### AI Decisions
-- Newest-first ordering with sort toggle
-- "NEW" badge with pulse animation (10s)
-- Inline AI panel in 3D MapboxView (filtered to selected bus)
+---
+
+## 📺 UI Tabs
+
+### Tab 1: Live Map (2D)
+- Real-time 5-bus Leaflet map with trail lines and dead zone overlays
+- Priority-sorted bus sidebar with signal bars, speed, heading
+- AI Decision Log (filtered to live/non-simulated decisions only)
+- ETA Timeline with ML-powered confidence cones
+
+### Tab 2: 3D View (Mapbox)
+- Mapbox GL 3D terrain with bus HUD overlay
+- Inline AI decision panel filtered per selected bus
+- Compact status strip at bottom
+
+### Tab 3: Simulation Lab (Laboratory)
+Scrollable control center with the following layout:
+
+```
+┌──────────────────────────────────────────────┐
+│  COMPACT CONTROL BAR (sticky)                │
+│  [TARGET: ALL MIT HIN HAD KAT PUN]          │
+│  [Signal ─── Loss ─── Latency ─── ...]      │
+│  [SCENARIO: 🚦RUSH  📡DEAD  🔄RECOVERY ⛈STORM]│
+├─────────────────────┬────────────────────────┤
+│                     │  ⚡ Layer Activity      │
+│                     │    Monitor             │
+│   SIMULATION MAP    │  ┌ Cascade Flow SVG ┐  │
+│       (70%)         │  ├ L1: Adaptive ────┤  │
+│                     │  ├ L2: Buffer ──────┤  │
+│                     │  ├ L3: Ghost ───────┤  │
+│                     │  ├ L4: ETA ─────────┤  │
+│                     │  ├ L5: Dead Zone ───┤  │
+├─────────────────────┤  └ L6: WebSocket ───┘  │
+│  ETA Timeline (70%) │     (30%, expands)     │
+└─────────────────────┴────────────────────────┘
+```
+
+**Layer Activity Monitor features:**
+- **Bus Selector** — auto-selects most critical bus or manual override
+- **Cascade Flow SVG** — animated arrows + pulsing nodes showing inter-layer triggering
+- **6 Layer Cards** — each shows:
+  - Active/idle status badge (color-coded per layer)
+  - Trigger reason and internal decision logic
+  - Real-time data (charts, bars, tables)
+  - AI Explanation panel with timestamped decisions
+- **Scenario Banner** — shows active scenario and expected cascade path
+
+---
+
+## 🎨 Design System — "Logista Slate"
+
+- **Mode:** Light mode only (permanently locked)
+- **Glassmorphism:** `rgba(255,255,255,0.4)` background, `blur(16px)`, frosted borders
+- **Typography:** Inter, system-ui
+- **Accent Colors:** Indigo `#6366f1`, Emerald `#10b981`
+- **Signal Colors:** Green `#22c55e`, Amber `#f59e0b`, Red `#ef4444`
+- **Cards:** `.glass-card` with `backdrop-filter: blur(16px)`, subtle box shadows
+- **Animations:** `layerActivate` flash, `cascadePulse`, `aiEntryFlash`, `signal-blink`
 
 ---
 
@@ -156,69 +240,61 @@ The app opens at **http://localhost:5173**
 3. ETA Timeline shows narrow green confidence cone
 
 ### Test 2: Signal Degradation
-1. Switch to **Simulation Lab** tab
-2. Drag **Signal Strength** → 30%
-3. Observe: ping interval jumps, waveform turns orange, ETA cone widens
+1. Switch to **Laboratory** tab
+2. Drag **Signal** → 30%
+3. Observe: Layer 1 activates (ping interval extends), ETA cone widens
 
-### Test 3: Dead Zone + Buffer Flush
-1. Click **Dead Zone** preset
-2. Observe: ghost bus appears, buffer climbing, signal lost overlays
-3. Click **Rush Hour** → buffer flushes, ghost deactivates
+### Test 3: Dead Zone Scenario
+1. Click **📡 DEAD ZONE** preset
+2. Observe cascade: L5 (Dead Zone) → L3 (Ghost) → L2 (Buffer) → L1 (Adaptive)
+3. Layer cards expand with real-time data + AI explanations
+4. Cascade Flow SVG shows animated arrows lighting up
 
 ### Test 4: Recovery Scenario
-1. Click **Recovery** preset
-2. Countdown 5→1, dead zone then auto-recovery
+1. Click **🔄 RECOVERY** preset
+2. 5-second countdown, then signal restores
+3. Watch reverse cascade: L2 flushes → L3 reconciles → L4 stabilizes
 
-### Test 5: Theme Toggle
-1. Click ☀️ in header → switches to light mode
-2. Map tiles change, all panels recolor
-3. Click 🌑 → returns to dark mode
+### Test 5: Storm Scenario
+1. Click **⛈ STORM** preset
+2. All 6 layers activate simultaneously
+3. Full cascade visible in SVG diagram
 
-### Test 6: Notifications
+### Test 6: Layer AI Explanations
+1. Trigger any scenario
+2. Each layer card shows 🤖 AI Explanation section
+3. Timestamped decisions with reasoning and action
+
+### Test 7: Notifications
 1. Trigger Dead Zone preset → bell badge increments
-2. Click 🔔 → drawer opens with ghost/dead zone/signal notifications
-3. Click entry to mark read, or use "Mark all read"
+2. Click 🔔 → drawer opens with ghost/dead zone notifications
+3. Note: simulated events do NOT pollute Live section notifications
 
-### Test 7: 3D AI Decisions
+### Test 8: 3D AI Decisions
 1. Click "Track in 3D" on any bus card
-2. AI Decisions panel appears below Bus HUD (right side)
-3. Only shows decisions for that specific bus
+2. AI Decisions panel appears filtered to that bus only
 
 ---
 
-## 🏗️ Architecture
+## 🔌 Backend Endpoints
 
-### Data Flow
-```
-GPS Emitter (5 buses, background tasks)
-    │
-    ├─ Every 0.5s: advance bus physics
-    ├─ Dead zone detection + ghost activation
-    ├─ AI Explainability engine logs decisions
-    │
-    ├─ Based on signal_strength:
-    │   ├─ ≥70%: emit every 2s (full payload)
-    │   ├─ 40–70%: emit every 6s (compressed)
-    │   ├─ 10–40%: emit every 12s (minimal)
-    │   └─ <10%: buffer pings (dead zone)
-    │
-    └─ WebSocket broadcast → all frontend clients
-```
-
-### Backend Endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| WS | `/ws/client` | Real-time bus position stream |
+| WS | `/ws/client` | Real-time bus position stream (~30 fields/ping) |
 | GET | `/api/routes` | Route geometries for all 5 routes |
 | GET | `/api/buses` | Current state of all 5 buses |
 | GET | `/api/dead-zones` | Dead zone definitions |
-| GET | `/api/trip-status` | Trip progress (optional ?bus_id=) |
-| GET | `/api/system-log` | AI decision log (optional ?bus_id=) |
+| GET | `/api/trip-status` | Trip progress (optional `?bus_id=`) |
+| GET | `/api/system-log` | AI decision log (optional `?bus_id=`) |
+| GET | `/api/layer-status/{bus_id}` | **Phase 8:** Computed state of all 6 layers |
 | POST | `/api/signal` | Set signal for specific bus |
 | POST | `/api/sim-config` | Apply simulation parameters |
 | POST | `/api/predict-eta` | ML-based ETA prediction |
 
-### 5-Bus Fleet
+---
+
+## 🚌 5-Bus Fleet
+
 | Bus | Route | Color |
 |-----|-------|-------|
 | MIT-01 | Pune Station → MITAOE | Purple |
@@ -227,9 +303,10 @@ GPS Emitter (5 buses, background tasks)
 | KAT-04 | Katraj → MITAOE | Crimson |
 | PUN-05 | Pimpri → MITAOE | Amber |
 
-### Dead Zones
-| Zone | Severity | Signal | Route Indices |
-|------|----------|--------|---------------|
+## 📡 Dead Zones
+
+| Zone | Severity | Signal | Route |
+|------|----------|--------|-------|
 | Katraj Ghat | Blackout | 0-5% | KAT-04 stops 3-5 |
 | Nanded Outskirts | Weak | 15-30% | MIT-01 stops 4-6 |
 | Bhosari Industrial | Weak | 20-35% | PUN-05 stops 2-4 |
@@ -237,9 +314,26 @@ GPS Emitter (5 buses, background tasks)
 
 ---
 
+## 📋 Phase History
+
+| Phase | Features |
+|-------|----------|
+| **1** | Single bus GPS simulation, Leaflet map |
+| **2** | Dead zones, ghost bus extrapolation, store-and-forward buffer |
+| **3** | 5-bus fleet, OSRM road geometry, multi-route tracking |
+| **4** | ML ETA prediction (GradientBoosting), confidence cones |
+| **5** | AI Decision Explainability engine, system decision logging |
+| **6** | Zekrom branding, dark/light mode, notification center, 70:30 layout |
+| **7** | Logista Slate UI overhaul, glassmorphism, AI log isolation (live vs sim) |
+| **8** | **Layer Activity Monitor** — 6-layer resilience visualization, cascade flow, per-layer AI explanations, scrollable simulation lab |
+
+---
+
 ## ⚠️ Notes
 - All routes converge at **MITAOE (18.6828°N, 74.1190°E)**
-- Uses **CARTO** tiles (dark/light) and **OSRM** for road geometry
+- Uses **CARTO Voyager** tiles and **OSRM** for road geometry
 - Optional **Mapbox** token enables 3D view
-- The entire system runs locally — no paid APIs
+- The entire system runs locally — no paid APIs required
 - ML model (`eta_model.pkl`) must be generated before starting backend
+- Always run `conda deactivate` before starting the dev server if using Conda
+- Design system is permanently locked to **light mode** (Logista Slate)
