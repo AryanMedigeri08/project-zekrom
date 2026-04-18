@@ -1,0 +1,46 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.whl
+venv/
+env/
+.venv/
+
+# ── Generated ML artifacts ──
+backend/eta_model.pkl
+backend/historical_trips.csv
+backend/feature_importance.png
+
+# ── Node / Frontend ──
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ── IDE / Editor ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Environment variables ──
+.env
+.env.local
+.env.*.local
+
+# ── Logs ──
+*.log
+npm-debug.log*
+
+# ── OS junk ──
+desktop.ini
+ehthumbs.db
