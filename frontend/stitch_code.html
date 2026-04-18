@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Resilient Transit AI - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.3);
+        }
+        .glow-red:hover {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+        .hud-line {
+            background: linear-gradient(90deg, transparent, rgba(0, 242, 255, 0.5), transparent);
+            height: 1px;
+            width: 100%;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-fixed": "#002022",
+                      "on-surface-variant": "#b9cacb",
+                      "on-secondary-fixed": "#022100",
+                      "surface-container-lowest": "#0e0e0e",
+                      "tertiary-container": "#ffd495",
+                      "on-secondary-fixed-variant": "#095300",
+                      "primary": "#e1fdff",
+                      "inverse-primary": "#00696f",
+                      "surface": "#131313",
+                      "outline-variant": "#3a494b",
+                      "secondary-container": "#2ff801",
+                      "tertiary": "#fff6ed",
+                      "on-secondary": "#053900",
+                      "on-tertiary-fixed-variant": "#614000",
+                      "tertiary-fixed-dim": "#ffba43",
+                      "tertiary-fixed": "#ffddaf",
+                      "primary-container": "#00f2ff",
+                      "secondary": "#d7ffc5",
+                      "on-error-container": "#ffdad6",
+                      "primary-fixed-dim": "#00dbe7",
+                      "inverse-on-surface": "#313030",
+                      "surface-container-high": "#2a2a2a",
+                      "surface-container": "#201f1f",
+                      "outline": "#849495",
+                      "on-tertiary-container": "#815700",
+                      "surface-dim": "#131313",
+                      "on-tertiary": "#432c00",
+                      "error-container": "#93000a",
+                      "surface-bright": "#3a3939",
+                      "surface-tint": "#00dbe7",
+                      "on-primary-fixed-variant": "#004f54",
+                      "on-primary": "#00363a",
+                      "secondary-fixed-dim": "#2ae500",
+                      "error": "#ffb4ab",
+                      "primary-fixed": "#74f5ff",
+                      "background": "#131313",
+                      "surface-container-low": "#1c1b1b",
+                      "on-surface": "#e5e2e1",
+                      "inverse-surface": "#e5e2e1",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed": "#281800",
+                      "on-secondary-container": "#0f6d00",
+                      "surface-variant": "#353534",
+                      "on-primary-container": "#006a71",
+                      "surface-container-highest": "#353534",
+                      "secondary-fixed": "#79ff5b",
+                      "on-background": "#e5e2e1"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "container-margin": "32px",
+                      "xs": "4px",
+                      "xl": "40px",
+                      "unit": "4px",
+                      "gutter": "20px"
+              },
+              "fontFamily": {
+                      "label-caps": ["Space Grotesk"],
+                      "headline-xl": ["Space Grotesk"],
+                      "body-sm": ["Inter"],
+                      "headline-md": ["Space Grotesk"],
+                      "data-display": ["Space Grotesk"],
+                      "body-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "label-caps": ["12px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                      "headline-xl": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-sm": ["14px", {"lineHeight": "1.5", "letterSpacing": "0", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "1.3", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                      "data-display": ["18px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "body-lg": ["16px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-surface text-on-surface font-body-lg min-h-screen selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-black/40 backdrop-blur-xl border-b border-cyan-500/20 shadow-[0_0_20px_rgba(0,0,0,0.5)] flex justify-between items-center w-full px-6 h-16 z-50 sticky top-0">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black tracking-tighter text-cyan-400 drop-shadow-[0_0_8px_rgba(0,242,255,0.5)] font-headline-md">Resilient Transit AI</span>
+<div class="h-6 w-[1px] bg-white/10 hidden md:block"></div>
+<nav class="hidden md:flex gap-8">
+<a class="font-['Space_Grotesk'] text-sm tracking-widest uppercase text-cyan-400 border-b-2 border-cyan-400 pb-2" href="#">Dashboard</a>
+<a class="font-['Space_Grotesk'] text-sm tracking-widest uppercase text-slate-400 hover:text-white transition-colors" href="#">Simulation</a>
+<a class="font-['Space_Grotesk'] text-sm tracking-widest uppercase text-slate-400 hover:text-white transition-colors" href="#">Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-slate-400 hover:text-cyan-400 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-slate-400 hover:text-cyan-400 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full border border-cyan-500/30 overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="close-up portrait of a tech professional with subtle blue rim lighting in a dark office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDudNXAaNxe5bsAcg2_-ubs2utZ0eFkCtxmqw6sxGQDAd9edMB91HrY2JZ0Ns_StWD_OpYldsjXkx1IBUoXWmK3xLJ1nNKCxk0eVRqzW8HlSuYMQIkA3r72IfcHQM_FjjGBAwBYkI2fI8Bn5rgXZmnNtMtvGXf3MphCNoFQiOd9GS-kGvxyFh5472SB820IWMv8TYn0M-TwSXt8BVJIlmCN_8fqmdeVrFeV6Cr3V-cX7zwiJfGJUJFldHTGUtdBfvU0xZbcRUYFly3o"/>
+</div>
+</div>
+</header>
+<main class="flex h-[calc(100vh-64px)] overflow-hidden">
+<!-- Left Sidebar (Simulation Controls) -->
+<aside class="fixed left-0 top-16 bottom-0 w-80 bg-black/30 backdrop-blur-2xl border-r border-cyan-500/10 flex flex-col p-6 gap-6 z-40 hidden xl:flex">
+<div>
+<h2 class="font-headline-md text-cyan-400 text-lg">Sim Controls</h2>
+<p class="font-label-caps text-[10px] text-slate-500">V-0.42 Active</p>
+</div>
+<div class="space-y-6">
+<!-- Latency Slider -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-xs text-slate-400 uppercase tracking-widest">Network Latency</label>
+<span class="font-data-display text-cyan-400 text-sm">20ms</span>
+</div>
+<div class="relative w-full h-1 bg-white/10 rounded-full">
+<div class="absolute top-0 left-0 h-full w-[20%] bg-cyan-400 glow-cyan rounded-full"></div>
+<div class="absolute top-1/2 left-[20%] -translate-y-1/2 w-3 h-3 bg-white rounded-full glow-cyan border border-cyan-400"></div>
+</div>
+</div>
+<!-- Packet Loss Slider -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-xs text-slate-400 uppercase tracking-widest">Packet Loss</label>
+<span class="font-data-display text-cyan-400 text-sm">2%</span>
+</div>
+<div class="relative w-full h-1 bg-white/10 rounded-full">
+<div class="absolute top-0 left-0 h-full w-[5%] bg-cyan-400 glow-cyan rounded-full"></div>
+<div class="absolute top-1/2 left-[5%] -translate-y-1/2 w-3 h-3 bg-white rounded-full glow-cyan border border-cyan-400"></div>
+</div>
+</div>
+<!-- Bandwidth Toggle -->
+<div class="space-y-3">
+<label class="font-label-caps text-xs text-slate-400 uppercase tracking-widest">Bandwidth</label>
+<div class="grid grid-cols-3 gap-2">
+<button class="bg-white/5 border border-white/10 py-2 rounded text-[10px] font-label-caps hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all">LOW</button>
+<button class="bg-cyan-500/20 border border-cyan-500/50 py-2 rounded text-[10px] font-label-caps text-cyan-400">MED</button>
+<button class="bg-white/5 border border-white/10 py-2 rounded text-[10px] font-label-caps hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all">HIGH</button>
+</div>
+</div>
+<!-- GPS Freq Slider -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-xs text-slate-400 uppercase tracking-widest">GPS Frequency</label>
+<span class="font-data-display text-cyan-400 text-sm">5s</span>
+</div>
+<div class="relative w-full h-1 bg-white/10 rounded-full">
+<div class="absolute top-0 left-0 h-full w-[40%] bg-cyan-400 glow-cyan rounded-full"></div>
+<div class="absolute top-1/2 left-[40%] -translate-y-1/2 w-3 h-3 bg-white rounded-full glow-cyan border border-cyan-400"></div>
+</div>
+</div>
+</div>
+<div class="mt-auto space-y-4">
+<div class="glass-card p-4 rounded-lg space-y-2 border-cyan-500/20">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse"></span>
+<span class="font-label-caps text-xs text-secondary-fixed">Live System Mode</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-cyan-400 text-sm" data-icon="signal_cellular_alt">signal_cellular_alt</span>
+<span class="font-body-sm text-xs text-slate-400">Signal Strength: Excellent</span>
+</div>
+</div>
+<button class="w-full bg-error-container/20 border border-error text-error py-4 rounded-lg font-label-caps tracking-widest hover:bg-error-container/40 transition-all glow-red uppercase">
+                    Simulate Network Drop
+                </button>
+</div>
+</aside>
+<!-- Center Main Panel (Map View) -->
+<section class="flex-1 relative h-full xl:ml-80 xl:mr-80">
+<div class="absolute inset-0 bg-surface">
+<div class="w-full h-full relative overflow-hidden">
+<img alt="City Map" class="w-full h-full object-cover opacity-60" data-alt="stylized 3D dark mode satellite map of a metropolitan city with glowing neon blue and green light trails representing traffic" data-location="San Francisco" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVVlFyx5u_Yz1R3HL56J7-3VBHuOlWAcNdCMNyPr-0T9QU-ZckYkXAUpwyjYsJ2g-Lud8qIEOZ0XpqlAt5PNIZhTDXcrcyL-Bj2IQJot4ZmDuRjRjHj1a-Ai35S-rrRllX7Xh7x0eOf-Cwhw_HFb1a26bOhYSJ142FcJbyGmPGK16-AGB4bOw9L7lBL-N615Izi4Xzp-n6hDfoz-XQ9VsefwdgAepILrXSJP6TTNmiqY2f9AVFvlDlHogQWwqfdBXaKE7_lPd7-3A0"/>
+<!-- SVG Overlay for Paths -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 800 600">
+<!-- Route Paths -->
+<path class="drop-shadow-[0_0_8px_rgba(0,242,255,0.8)]" d="M 100 500 L 300 400 L 450 420 L 600 300" fill="none" stroke="#00f2ff" stroke-linecap="round" stroke-width="3"></path>
+<path d="M 600 300 L 700 200 L 750 150" fill="none" opacity="0.6" stroke="#00f2ff" stroke-dasharray="8 8" stroke-width="3"></path>
+<!-- Bus Markers -->
+<circle cx="100" cy="500" fill="#00f2ff" r="6"></circle>
+<circle cx="300" cy="400" fill="#00f2ff" r="6"></circle>
+<!-- Selected Bus -->
+<g transform="translate(450, 420) rotate(-20)">
+<rect class="drop-shadow-[0_0_12px_rgba(0,242,255,1)]" fill="#00f2ff" height="40" rx="4" width="24" x="-12" y="-20"></rect>
+<text class="font-label-caps text-[10px]" fill="#00f2ff" x="-20" y="-30">BUS-882 (ACTIVE)</text>
+</g>
+</svg>
+<!-- HUD Overlays -->
+<div class="absolute top-6 left-6 flex flex-col gap-4">
+<div class="glass-card px-4 py-2 rounded-full flex items-center gap-3">
+<span class="material-symbols-outlined text-cyan-400 text-sm" data-icon="search">search</span>
+<span class="text-xs text-slate-300 font-body-sm">Search Fleet ID or Route...</span>
+</div>
+</div>
+<div class="absolute bottom-6 right-6 flex flex-col gap-2">
+<button class="w-10 h-10 glass-card rounded-lg flex items-center justify-center text-white hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<button class="w-10 h-10 glass-card rounded-lg flex items-center justify-center text-white hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<button class="w-10 h-10 glass-card rounded-lg flex items-center justify-center text-cyan-400 hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined" data-icon="my_location">my_location</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar (System Intelligence) -->
+<aside class="fixed right-0 top-16 bottom-0 w-80 bg-black/30 backdrop-blur-2xl border-l border-cyan-500/10 flex flex-col p-6 gap-6 z-40 hidden xl:flex">
+<div>
+<h2 class="font-headline-md text-cyan-400 text-lg uppercase tracking-tight">System Intel</h2>
+<div class="hud-line mt-2 opacity-30"></div>
+</div>
+<!-- Confidence Level Card -->
+<div class="glass-card p-5 rounded-xl space-y-4 border-cyan-500/10">
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-xs text-slate-400 uppercase">AI Confidence</span>
+<span class="font-headline-md text-cyan-400">92%</span>
+</div>
+<div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+<div class="h-full w-[92%] bg-gradient-to-r from-cyan-600 to-cyan-400 glow-cyan"></div>
+</div>
+<p class="font-body-sm text-[11px] text-slate-500 italic">"Prediction stability remains high despite current latency spikes."</p>
+</div>
+<!-- Telemetry Grid -->
+<div class="grid grid-cols-1 gap-4">
+<div class="glass-card p-4 rounded-xl border-cyan-500/10 flex justify-between items-center">
+<div>
+<span class="font-label-caps text-[10px] text-slate-500 block uppercase">ETA</span>
+<span class="font-data-display text-white text-lg">4m 12s</span>
+</div>
+<span class="material-symbols-outlined text-secondary-fixed/50" data-icon="schedule">schedule</span>
+</div>
+<div class="glass-card p-4 rounded-xl border-cyan-500/10 flex justify-between items-center">
+<div>
+<span class="font-label-caps text-[10px] text-slate-500 block uppercase">Speed</span>
+<span class="font-data-display text-white text-lg">42km/h</span>
+</div>
+<span class="material-symbols-outlined text-cyan-400/50" data-icon="speed">speed</span>
+</div>
+</div>
+<!-- Badges -->
+<div class="flex flex-wrap gap-2">
+<div class="bg-secondary-fixed/10 border border-secondary-fixed/20 rounded-full px-3 py-1 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-fixed animate-pulse"></span>
+<span class="text-[10px] font-label-caps text-secondary-fixed">LIVE DATA</span>
+</div>
+<div class="bg-cyan-500/10 border border-cyan-500/20 rounded-full px-3 py-1 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+<span class="text-[10px] font-label-caps text-cyan-400">PREDICTED MODE</span>
+</div>
+</div>
+<!-- Stability Chart -->
+<div class="mt-auto">
+<span class="font-label-caps text-[10px] text-slate-500 uppercase mb-3 block">ETA Stability (Last 60m)</span>
+<div class="h-24 w-full relative">
+<!-- SVG Mini Chart -->
+<svg class="w-full h-full" viewbox="0 0 100 40">
+<path class="drop-shadow-[0_0_5px_rgba(0,242,255,0.5)]" d="M0 30 Q 10 25, 20 32 T 40 28 T 60 22 T 80 25 T 100 18" fill="none" stroke="#00f2ff" stroke-width="2"></path>
+<path d="M0 30 Q 10 25, 20 32 T 40 28 T 60 22 T 80 25 T 100 18 V 40 H 0 Z" fill="url(#chart-grad)" opacity="0.1"></path>
+<defs>
+<lineargradient id="chart-grad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#00f2ff"></stop>
+<stop offset="100%" stop-color="transparent"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+</div>
+</aside>
+</main>
+<!-- Mobile Navigation (Fallback) -->
+<div class="xl:hidden fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 h-16 flex justify-around items-center z-50">
+<button class="text-cyan-400 flex flex-col items-center">
+<span class="material-symbols-outlined" data-icon="speed">speed</span>
+<span class="text-[9px] font-label-caps">Controls</span>
+</button>
+<button class="text-slate-400 flex flex-col items-center">
+<span class="material-symbols-outlined" data-icon="map">map</span>
+<span class="text-[9px] font-label-caps">Map</span>
+</button>
+<button class="text-slate-400 flex flex-col items-center">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="text-[9px] font-label-caps">Intel</span>
+</button>
+</div>
+</body></html>

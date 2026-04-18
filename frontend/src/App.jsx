@@ -75,7 +75,7 @@ export default function App() {
       {mode === '3d' ? (
         <>
           <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ flex: 1, position: 'relative', padding: '12px' }}>
+            <div style={{ flex: 1, position: 'relative', padding: '16px' }}>
               <MapboxView
                 bus={selectedBus}
                 routeGeometry={selectedRoute?.geometry}
@@ -83,7 +83,7 @@ export default function App() {
                 onBack={returnToFleet}
               />
             </div>
-            <div style={{ width: '300px', flexShrink: 0, padding: '12px 12px 12px 0', overflowY: 'auto' }}>
+            <div style={{ width: '320px', flexShrink: 0, padding: '16px 16px 16px 0', overflowY: 'auto' }}>
               <BusSidebar buses={buses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
             </div>
           </main>
@@ -92,27 +92,29 @@ export default function App() {
 
       ) : activeTab === 'live' ? (
         /* ══ LIVE MAP TAB — 70:30 split ══ */
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '16px' }}>
           {/* Map (70%) + Sidebar (30%) */}
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '70fr 30fr', gap: '12px', padding: '12px', minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '70fr 30fr', gap: '16px', minHeight: 0, overflow: 'hidden' }}>
             {/* Full-height Map */}
-            <div style={{ overflow: 'hidden', borderRadius: '12px', minHeight: 0 }}>
-              <MapView
-                routes={routes}
-                buses={buses}
-                deadZones={deadZones}
-                mitaoe={mitaoe}
-                onBusSelect={selectBus}
-                mapId="live-map"
-              />
+            <div className="glass-card" style={{ overflow: 'hidden', minHeight: 0, padding: '4px' }}>
+              <div style={{ width: '100%', height: '100%', borderRadius: '6px', overflow: 'hidden' }}>
+                <MapView
+                  routes={routes}
+                  buses={buses}
+                  deadZones={deadZones}
+                  mitaoe={mitaoe}
+                  onBusSelect={selectBus}
+                  mapId="live-map"
+                />
+              </div>
             </div>
 
             {/* Right sidebar: Bus cards, ETA, AI — stacked */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', minHeight: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
               <div style={{ flexShrink: 0 }}>
                 <BusSidebar buses={buses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
               </div>
-              <div style={{ flexShrink: 0 }}>
+              <div className="glass-card" style={{ flexShrink: 0, padding: '16px' }}>
                 <ETATimeline buses={buses} routes={routes} simConfig={simConfig} />
               </div>
               <div style={{ flexShrink: 0, minHeight: '200px' }}>

@@ -5,36 +5,35 @@
 @tailwind utilities;
 
 /* ================================================================
-   Zekrom — Phase 6: Full Theme System + Font Sizes + Variables
+   Zekrom — Phase 7: Mission Control / Glassmorphism
    ================================================================ */
 
 :root {
-  /* Font sizes — no text below 12px */
+  /* Font sizes */
   --font-xs: 12px;
   --font-sm: 14px;
   --font-base: 16px;
   --font-md: 18px;
   --font-lg: 20px;
   --font-xl: 24px;
-  --font-2xl: 28px;
+  --font-xl: 40px;
 
-  /* Default dark theme — overridden by ThemeContext JS */
-  --color-bg: #000000;
-  --color-bg-secondary: #0a0a0a;
-  --color-bg-card: #111111;
-  --color-bg-card-hover: #1a1a1a;
-  --color-border: #222222;
-  --color-text: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #475569;
-  --color-nav-bg: #050505;
-  --color-panel-bg: #0d0d0d;
-  --color-input-bg: #1a1a1a;
+  /* HUD Dark Theme Colors */
+  --color-bg: #121212;
+  --color-bg-secondary: #1a1a1a;
+  --color-bg-card: rgba(255, 255, 255, 0.03);
+  --color-bg-card-hover: rgba(255, 255, 255, 0.05);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-text: #e5e2e1;
+  --color-text-secondary: #b9cacb;
+  --color-text-muted: #849495;
+  --color-nav-bg: rgba(0, 0, 0, 0.4);
   --color-scrollbar: #333333;
 
-  /* Signal colors (static) */
-  --signal-green: #22c55e;
-  --signal-yellow: #eab308;
+  /* Neon Signal Accents */
+  --signal-cyan: #00f2ff;
+  --signal-green: #39ff14;
+  --signal-amber: #f97316;
   --signal-red: #ef4444;
 }
 
@@ -43,53 +42,67 @@
 body {
   font-size: var(--font-base);
   line-height: 1.6;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
   background: var(--color-bg);
   color: var(--color-text);
+  overflow: hidden;
+}
+
+h1, h2, h3, h4, .data-display, .font-headline-md, .font-headline-xl {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-label-caps {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .leaflet-container:focus { outline: none; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
-::-webkit-scrollbar-thumb { background: var(--color-scrollbar); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--signal-cyan); }
 
 /* ================================================================
-   Zekrom Card
+   HUD / Glass Classes
    ================================================================ */
+.glass-card {
+  background: var(--color-bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+}
+
+.hud-line {
+  background: linear-gradient(90deg, transparent, rgba(0, 242, 255, 0.5), transparent);
+  height: 1px;
+  width: 100%;
+}
+
 .zk-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  transition: background 0.2s, border-color 0.2s;
+  border-radius: 0.5rem;
+  backdrop-filter: blur(20px);
+  transition: border-color 0.2s, background 0.2s;
 }
-
 .zk-card:hover {
   background: var(--color-bg-card-hover);
-}
-
-/* Legacy support */
-.card-panel {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-}
-
-/* ================================================================
-   Stop Marker
-   ================================================================ */
-.stop-marker {
-  width: 10px;
-  height: 10px;
-  background: #3b82f6;
-  border: 2px solid var(--color-bg-card);
-  border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  border-color: rgba(0, 242, 255, 0.3);
 }
 
 /* ================================================================
@@ -103,17 +116,17 @@ body {
 }
 .signal-dot.online {
   background: var(--signal-green);
-  box-shadow: 0 0 6px var(--signal-green);
+  box-shadow: 0 0 8px var(--signal-green);
   animation: signal-blink 1.5s infinite;
 }
 .signal-dot.degraded {
-  background: var(--signal-yellow);
-  box-shadow: 0 0 6px var(--signal-yellow);
+  background: var(--signal-amber);
+  box-shadow: 0 0 8px var(--signal-amber);
   animation: signal-blink 2.5s infinite;
 }
 .signal-dot.offline {
   background: var(--signal-red);
-  box-shadow: 0 0 6px var(--signal-red);
+  box-shadow: 0 0 8px var(--signal-red);
   animation: signal-blink 0.8s infinite;
 }
 
@@ -136,37 +149,26 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #1e293b;
-  border: 3px solid;
+  background: rgba(0, 242, 255, 0.1);
+  border: 2px solid var(--signal-cyan);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
   z-index: 2;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  transition: border-color 0.5s ease;
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.5);
+  backdrop-filter: blur(4px);
 }
 
-.marker-icon { line-height: 1; }
+.marker-icon { line-height: 1; font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: #fff; }
 .marker-label {
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 8px;
-  color: #e2e8f0;
+  color: var(--signal-cyan);
   font-weight: 700;
   letter-spacing: 0.5px;
   margin-top: 1px;
-}
-
-.marker-shadow-3d {
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 30px;
-  height: 8px;
-  background: rgba(0,0,0,0.4);
-  border-radius: 50%;
-  filter: blur(3px);
 }
 
 .pulse-3d {
@@ -180,6 +182,7 @@ body {
   z-index: 1;
   animation: pulse3d 2s ease-out infinite;
   pointer-events: none;
+  background: rgba(0, 242, 255, 0.2);
 }
 
 @keyframes pulse3d {
@@ -188,8 +191,11 @@ body {
 }
 
 .ghost-mode-3d .marker-body-3d {
-  opacity: 0.4;
+  opacity: 0.6;
   border-style: dashed;
+  border-color: var(--signal-amber);
+  background: rgba(249, 115, 22, 0.1);
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.5);
 }
 .ghost-mode-3d::after {
   content: 'ESTIMATED';
@@ -199,72 +205,15 @@ body {
   transform: translateX(-50%);
   font-size: 8px;
   font-weight: 800;
-  color: #f97316;
+  color: var(--signal-amber);
   letter-spacing: 1px;
-  white-space: nowrap;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
 .mapboxgl-map { width: 100%; height: 100%; }
 
 /* ================================================================
-   Transition Overlay (2D ↔ 3D)
-   ================================================================ */
-.transition-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-bg);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: overlayFade 450ms ease-in-out forwards;
-}
-
-@keyframes overlayFade {
-  0% { opacity: 0; }
-  15% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.transition-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.transition-title {
-  color: var(--color-text);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-.transition-sub {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-.transition-bar {
-  width: 200px;
-  height: 3px;
-  background: var(--color-border);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 4px;
-}
-.transition-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 2px;
-  animation: barFill 450ms ease-out forwards;
-}
-
-@keyframes barFill {
-  from { width: 0%; }
-  to { width: 100%; }
-}
-
-/* ================================================================
-   Zekrom Popup (Leaflet)
+   Zekrom Popup (Leaflet HUD Style)
    ================================================================ */
 .zekrom-popup {
   max-width: 280px !important;
@@ -272,75 +221,63 @@ body {
   line-height: 1.5 !important;
 }
 .zekrom-popup .leaflet-popup-content-wrapper {
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-  background: var(--color-bg-card);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(12px);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--signal-cyan);
 }
 .zekrom-popup .leaflet-popup-content {
   margin: 12px 16px !important;
-  width: auto !important;
   max-width: 248px !important;
-  word-wrap: break-word !important;
-  overflow-wrap: break-word !important;
-  white-space: normal !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
-}
-.zekrom-popup .leaflet-popup-content p {
-  margin: 6px 0 !important;
-  font-size: 13px !important;
+  font-family: 'Inter', sans-serif !important;
 }
 .zekrom-popup .leaflet-popup-tip {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
+  background: rgba(10, 10, 10, 0.85);
+  border: 1px solid var(--signal-cyan);
   box-shadow: none;
 }
 
 .zekrom-tooltip {
   font-size: 12px !important;
+  font-family: 'Space Grotesk', sans-serif !important;
   font-weight: 600 !important;
-  border-radius: 6px !important;
+  border-radius: 4px !important;
   padding: 4px 8px !important;
-  background: var(--color-bg-card) !important;
-  color: var(--color-text) !important;
-  border: 1px solid var(--color-border) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
-}
-
-.zekrom-tooltip-mitaoe {
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  border-radius: 6px !important;
-  padding: 4px 10px !important;
-  background: #6366f1 !important;
-  color: #fff !important;
-  border: none !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+  color: var(--signal-cyan) !important;
+  border: 1px solid var(--signal-cyan) !important;
 }
 
 /* ================================================================
-   NEW Badge (AI Decision Log)
+   Range Slider HUD Style
    ================================================================ */
-.new-badge {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  background: #6366f1;
-  color: white;
-  padding: 2px 6px;
-  border-radius: 999px;
-  animation: badgePulse 1s ease-in-out 3;
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--signal-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 242, 255, 0.8);
+  transition: transform 0.1s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
 }
 
-@keyframes badgePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* ================================================================
-   Notification Drawer Animation
-   ================================================================ */
 @keyframes slideDown {
   from { transform: translateY(-10px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
@@ -348,147 +285,4 @@ body {
 
 .notif-drawer {
   animation: slideDown 250ms ease-out;
-}
-
-/* ================================================================
-   Range Slider
-   ================================================================ */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 5px;
-  border-radius: 3px;
-  outline: none;
-  background: var(--color-border);
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #14b8a6;
-  border: 2px solid var(--color-bg-card);
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-}
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #14b8a6;
-  border: 2px solid var(--color-bg-card);
-  cursor: pointer;
-}
-
-/* ================================================================
-   Tooltip (CSS only)
-   ================================================================ */
-.info-tooltip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-.info-tooltip .tooltip-text {
-  visibility: hidden;
-  opacity: 0;
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 200px;
-  padding: 8px 10px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #fff;
-  background: #1e293b;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 100;
-  transition: opacity 0.15s, visibility 0.15s;
-  pointer-events: none;
-}
-.info-tooltip .tooltip-text::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #1e293b;
-}
-.info-tooltip:hover .tooltip-text {
-  visibility: visible;
-  opacity: 1;
-}
-
-/* ================================================================
-   Map Legend
-   ================================================================ */
-.map-legend {
-  background: var(--color-bg-card);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  line-height: 1.7;
-  color: var(--color-text-secondary);
-}
-.map-legend h4 {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-.map-legend .legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-.map-legend .legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.map-legend .legend-line {
-  width: 16px;
-  height: 3px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-/* ================================================================
-   Theme Toggle
-   ================================================================ */
-.theme-toggle {
-  transition: transform 0.3s ease;
-}
-.theme-toggle:active {
-  transform: rotate(180deg);
-}
-
-/* ================================================================
-   Leaflet marker hover
-   ================================================================ */
-.leaflet-marker-icon {
-  transition: transform 0.15s ease, filter 0.15s ease;
-}
-.leaflet-marker-icon:hover {
-  transform: scale(1.1);
-  filter: brightness(1.1);
-}
-
-/* ================================================================
-   Leaflet attribution
-   ================================================================ */
-.leaflet-control-attribution {
-  font-size: 10px !important;
-  background: var(--color-bg-card) !important;
-  color: var(--color-text-muted) !important;
 }

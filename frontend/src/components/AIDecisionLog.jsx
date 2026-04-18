@@ -1,35 +1,26 @@
 /**
- * AIDecisionLog.jsx — Newest-first, sort toggle, NEW badge, theme-aware.
+ * AIDecisionLog.jsx — Mission Control System Intel Panel
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 
 const API_BASE = 'http://localhost:8000';
 
 const BORDER_COLORS = {
-  'Ghost Bus Activated': '#8b5cf6',
-  'Buffer Flush Executed': '#22c55e',
-  'Ping Interval Adjusted': '#eab308',
-  'ETA Recalculated': '#3b82f6',
-  'Dead Zone Entry': '#ef4444',
+  'Ghost Bus Activated': 'var(--signal-amber)',
+  'Buffer Flush Executed': 'var(--signal-green)',
+  'Ping Interval Adjusted': 'var(--signal-cyan)',
+  'ETA Recalculated': 'var(--signal-cyan)',
+  'Dead Zone Entry': 'var(--signal-red)',
 };
 
 const BG_DARK = {
-  'Ghost Bus Activated': 'rgba(139,92,246,0.08)',
-  'Buffer Flush Executed': 'rgba(34,197,94,0.08)',
-  'Ping Interval Adjusted': 'rgba(234,179,8,0.08)',
-  'ETA Recalculated': 'rgba(59,130,246,0.08)',
-  'Dead Zone Entry': 'rgba(239,68,68,0.08)',
-};
-
-const BG_LIGHT = {
-  'Ghost Bus Activated': 'rgba(139,92,246,0.06)',
-  'Buffer Flush Executed': 'rgba(34,197,94,0.06)',
-  'Ping Interval Adjusted': 'rgba(234,179,8,0.06)',
-  'ETA Recalculated': 'rgba(59,130,246,0.06)',
-  'Dead Zone Entry': 'rgba(239,68,68,0.06)',
+  'Ghost Bus Activated': 'rgba(249,115,22,0.1)',
+  'Buffer Flush Executed': 'rgba(57,255,20,0.1)',
+  'Ping Interval Adjusted': 'rgba(0,242,255,0.1)',
+  'ETA Recalculated': 'rgba(0,242,255,0.1)',
+  'Dead Zone Entry': 'rgba(239,68,68,0.1)',
 };
 
 function isRecent(timestamp) {
@@ -42,9 +33,7 @@ function isRecent(timestamp) {
 }
 
 export default function AIDecisionLog({ busFilter }) {
-  const { theme } = useTheme();
   const { addNotification } = useNotifications();
-  const isDark = theme === 'dark';
   const [entries, setEntries] = useState([]);
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [sortAsc, setSortAsc] = useState(false); // false = newest first
@@ -57,15 +46,13 @@ export default function AIDecisionLog({ busFilter }) {
       const data = await resp.json();
       const withExp = data.filter(e => e.explanation);
 
-      // Newest first: reverse the API data (API returns oldest first)
       const reversed = [...withExp].reverse();
 
-      // Detect new entries and push notifications
       reversed.forEach(e => {
         const key = `${e.timestamp}-${e.explanation?.decision}-${e.explanation?.bus_id}`;
         if (!seenIdsRef.current.has(key)) {
           seenIdsRef.current.add(key);
-          if (seenIdsRef.current.size > 5) { // skip initial batch
+          if (seenIdsRef.current.size > 5) {
             addNotification({
               type: 'ai_decision',
               title: e.explanation?.decision || e.message,
@@ -88,117 +75,117 @@ export default function AIDecisionLog({ busFilter }) {
     return () => clearInterval(iv);
   }, [poll]);
 
-  // Filter by bus if provided
   let display = entries;
   if (busFilter) {
     display = entries.filter(e => e.explanation?.bus_id === busFilter);
   }
-
-  // Sort toggle: newest first (default) or oldest first
   if (sortAsc) {
     display = [...display].reverse();
   }
 
   return (
-    <div className="zk-card" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden' }}>
+    <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingBottom: '6px', borderBottom: '1px solid var(--color-border)',
+        paddingBottom: '8px', borderBottom: '1px solid rgba(0,242,255,0.2)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text)' }}>AI Decisions</span>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{display.length}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="font-label-caps" style={{ fontSize: '14px', color: 'var(--signal-cyan)', textShadow: '0 0 8px rgba(0,242,255,0.4)' }}>SYSTEM INTEL</span>
+          <span className="font-data-display" style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>[{display.length}]</span>
         </div>
-        <button onClick={() => setSortAsc(!sortAsc)} style={{
-          fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px',
+        <button onClick={() => setSortAsc(!sortAsc)} className="font-label-caps" style={{
+          fontSize: '10px', padding: '4px 8px', borderRadius: '4px',
           border: '1px solid var(--color-border)', cursor: 'pointer',
-          background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)',
+          background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-secondary)',
+          transition: 'all 0.2s',
         }}>
-          {sortAsc ? '↓ Oldest First' : '↑ Newest First'}
+          {sortAsc ? 'CHRONOLOGICAL' : 'REVERSE CHRONO'}
         </button>
       </div>
 
       {/* Entries */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
         {display.length === 0 && (
-          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>
-            {busFilter ? `No decisions for this bus yet. Monitoring...` : 'No AI decisions yet'}
+          <p className="font-label-caps" style={{ fontSize: '11px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>
+            {busFilter ? `AWAITING TELEMETRY...` : 'STANDBY MODE'}
           </p>
         )}
         {display.map((entry, i) => {
           const exp = entry.explanation || {};
           const decision = exp.decision || entry.message || '';
-          const borderColor = BORDER_COLORS[decision] || 'var(--color-border)';
-          const bgColor = isDark ? (BG_DARK[decision] || 'transparent') : (BG_LIGHT[decision] || 'transparent');
+          const bColor = BORDER_COLORS[decision] || 'var(--color-border)';
+          const bgColor = BG_DARK[decision] || 'rgba(255,255,255,0.02)';
           const isExpanded = expandedIdx === i;
           const recent = isRecent(entry.timestamp);
 
           return (
-            <div key={i} style={{
-              borderLeft: `3px solid ${borderColor}`,
+            <div key={i} className="glass-card" style={{
+              borderLeft: `2px solid ${bColor}`,
+              borderRight: 'none', borderTop: 'none', borderBottom: 'none',
               background: bgColor,
-              borderRadius: '0 8px 8px 0',
-              padding: '8px 12px',
-              transition: 'all 0.15s',
+              padding: '10px 12px',
+              transition: 'all 0.2s',
             }}>
               {/* Header row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--color-text-muted)' }}>{entry.timestamp}</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text)' }}>{decision}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="font-data-display" style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{entry.timestamp}</span>
+                <span className="font-label-caps" style={{ fontSize: '11px', color: bColor, textShadow: `0 0 8px ${bColor}80` }}>{decision}</span>
                 {exp.bus_id && (
-                  <span style={{
-                    fontSize: '11px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
-                    background: isDark ? '#1e293b' : '#e2e8f0', color: 'var(--color-text-secondary)',
+                  <span className="font-data-display" style={{
+                    fontSize: '11px', padding: '2px 6px', borderRadius: '2px',
+                    background: 'rgba(0,0,0,0.4)', color: 'var(--color-text-secondary)',
+                    border: '1px solid rgba(255,255,255,0.1)'
                   }}>{exp.bus_id.replace('bus_0', '').replace('bus_', '')}</span>
                 )}
-                {recent && <span className="new-badge">NEW</span>}
+                {recent && <span className="font-label-caps" style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '2px', background: 'var(--signal-amber)', color: '#000', boxShadow: '0 0 8px rgba(249,115,22,0.8)', animation: 'signal-blink 1s infinite' }}>NEW</span>}
               </div>
 
               {/* Trigger */}
               {exp.trigger && (
-                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '2px 0 0' }}>Trigger: {exp.trigger}</p>
+                <p className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>TRIGGER: <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'Inter', textTransform: 'none' }}>{exp.trigger}</span></p>
               )}
 
               {/* Expand toggle */}
-              <button onClick={() => setExpandedIdx(isExpanded ? null : i)} style={{
-                fontSize: '12px', fontWeight: 600, color: '#6366f1', marginTop: '4px',
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              <button onClick={() => setExpandedIdx(isExpanded ? null : i)} className="font-label-caps glow-cyan" style={{
+                fontSize: '10px', color: 'var(--signal-cyan)', marginTop: '8px',
+                background: 'rgba(0,242,255,0.1)', border: '1px solid var(--signal-cyan)', cursor: 'pointer', padding: '2px 8px', borderRadius: '4px'
               }}>
-                {isExpanded ? '▼ Hide Reasoning' : '▶ View Reasoning'}
+                {isExpanded ? 'CLOSE LOG' : 'VIEW LOG'}
               </button>
 
               {/* Expanded reasoning */}
               {isExpanded && (
-                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${bColor}40` }}>
                   {exp.reasoning && (
-                    <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 6px' }}>{exp.reasoning}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 10px', fontFamily: 'Inter' }}>{exp.reasoning}</p>
                   )}
                   <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {exp.confidence != null && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Confidence:</span>
-                        <div style={{ width: '60px', height: '6px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>CONFIDENCE</span>
+                        <div style={{ width: '80px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
                           <div style={{
-                            height: '100%', borderRadius: '3px', width: `${Math.round(exp.confidence * 100)}%`,
-                            background: exp.confidence >= 0.75 ? '#22c55e' : exp.confidence >= 0.5 ? '#eab308' : '#ef4444',
+                            height: '100%', borderRadius: '2px', width: `${Math.round(exp.confidence * 100)}%`,
+                            background: exp.confidence >= 0.75 ? 'var(--signal-green)' : exp.confidence >= 0.5 ? 'var(--signal-amber)' : 'var(--signal-red)',
+                            boxShadow: `0 0 8px ${exp.confidence >= 0.75 ? 'var(--signal-green)' : exp.confidence >= 0.5 ? 'var(--signal-amber)' : 'var(--signal-red)'}`
                           }} />
                         </div>
-                        <span style={{
-                          fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-                          color: exp.confidence >= 0.75 ? '#22c55e' : exp.confidence >= 0.5 ? '#eab308' : '#ef4444',
+                        <span className="font-data-display" style={{
+                          fontSize: '14px',
+                          color: exp.confidence >= 0.75 ? 'var(--signal-green)' : exp.confidence >= 0.5 ? 'var(--signal-amber)' : 'var(--signal-red)',
                         }}>{Math.round(exp.confidence * 100)}%</span>
                       </div>
                     )}
                     {exp.expected_duration && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Duration:</span>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>{exp.expected_duration}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="font-label-caps" style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>DURATION</span>
+                        <span className="font-data-display" style={{ fontSize: '14px', color: 'var(--color-text)' }}>{exp.expected_duration}</span>
                       </div>
                     )}
                   </div>
                   {exp.action && (
-                    <p style={{ fontSize: '12px', color: '#6366f1', fontWeight: 500, margin: '6px 0 0' }}>Action: {exp.action}</p>
+                    <p className="font-label-caps" style={{ fontSize: '10px', color: 'var(--signal-cyan)', margin: '8px 0 0' }}>EXEC: <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'Inter', textTransform: 'none' }}>{exp.action}</span></p>
                   )}
                 </div>
               )}

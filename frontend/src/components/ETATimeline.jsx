@@ -121,7 +121,7 @@ export default function ETATimeline({ buses, routes, simConfig }) {
               <g key={i}>
                 <circle cx={x} cy={ROW1_Y} r={isTerminal ? 6 : 4}
                   fill={isPassed ? tabColor : lineColor} stroke={isPassed ? tabColor : svgTextColor} strokeWidth="1.5" />
-                {i === 0 && <text x={x} y={ROW1_Y + 18} textAnchor="start" fill={svgTextColor} fontSize="9" fontWeight="500">{stops[0]?.name?.split(' ').slice(0, 2).join(' ')}</text>}
+                {i === 0 && <text x={x} y={ROW1_Y + 18} textAnchor="start" fill={svgTextColor} fontSize="9" fontWeight="500">{(stops[0]?.name || '').split(' ').slice(0, 2).join(' ')}</text>}
                 {i === totalStops - 1 && <text x={x} y={ROW1_Y + 18} textAnchor="end" fill="#6366f1" fontSize="9" fontWeight="700">MITAOE</text>}
               </g>
             );
