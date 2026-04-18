@@ -1,16 +1,17 @@
 """
-FastAPI Backend — Phase 3: Multi-bus, road-following routes.
+FastAPI Backend — Phase 5: 5 buses, dead zones, AI explainability.
 
 Startup:
-  1. Fetch OSRM road geometry for 3 routes (cached)
-  2. Create 3 BusEmitter instances
-  3. Launch 3 independent async simulation tasks
+  1. Fetch OSRM road geometry for 5 routes (cached)
+  2. Create 5 BusEmitter instances
+  3. Launch 5 independent async simulation tasks
 
 Endpoints:
   GET  /api/routes        — road geometry for all routes
   GET  /api/buses         — current state of all buses
+  GET  /api/dead-zones    — dead zone definitions
   GET  /api/trip-status   — trip progress (optional ?bus_id=)
-  GET  /api/system-log    — decision log (optional ?bus_id=)
+  GET  /api/system-log    — AI decision log (optional ?bus_id=)
   POST /api/signal        — set signal for a specific bus
   POST /api/sim-config    — apply config (optional bus_id field)
   POST /api/predict-eta   — ML ETA prediction
@@ -30,104 +31,151 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from config import (
-    ROUTE_DEFINITIONS,
-    BUS_DEFINITIONS,
-    bus_configs,
-    sim_config,
-    SIMULATION_TICK_S,
-    HEARTBEAT_INTERVAL_S,
-    get_effective_ping_interval,
-    get_traffic_label,
-)
+from config import ROUTES, BUSES, SimConfig, TRAFFIC_LABELS, MITAOE_DESTINATION
 from route_builder import fetch_all_routes
-from gps_emitter import BusEmitter, create_emitters
+from gps_emitter import BusEmitter
 from buffer import BusBufferManager
 from logger import system_logger
+from dead_zones import DEAD_ZONES, get_dead_zones_for_route
 
 
-# ---------------------------------------------------------------------------
-# Module-Level State
-# ---------------------------------------------------------------------------
-
-cached_routes: Dict[str, Any] = {}          # route_id -> { geometry, stops, ... }
-emitters: Dict[str, BusEmitter] = {}        # bus_id -> BusEmitter
+# ── Module State ──────────────────────────────────────────────
+cached_routes: Dict[str, Any] = {}
+bus_emitters: Dict[str, BusEmitter] = {}
 buffer_mgr: Optional[BusBufferManager] = None
+sim_config: Optional[SimConfig] = None
 connected_clients: Set[WebSocket] = set()
-
-# Per-bus runtime state
-bus_state: Dict[str, Dict[str, Any]] = {}   # bus_id -> { last_ping, last_emit_time, ... }
-
-# ML Model
 eta_model = None
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "eta_model.pkl")
 
-
-def init_bus_state():
-    """Initialize runtime state dict for each bus."""
-    global bus_state
-    now = time.monotonic()
-    for bus_id in BUS_DEFINITIONS:
-        bus_state[bus_id] = {
-            "last_ping": None,
-            "last_emit_time": 0.0,
-            "last_real_ping_time": 0.0,
-            "was_dead": False,
-            "trip_start_time": now,
-        }
+# AI decision log (in-memory, last 100 entries)
+decision_log: List[Dict] = []
+MAX_LOG_SIZE = 100
 
 
-# ---------------------------------------------------------------------------
-# Lifespan
-# ---------------------------------------------------------------------------
+def log_decision(level: str, message: str, explanation: dict = None):
+    """Log an AI decision with full explanation."""
+    entry = {
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "level": level,
+        "message": message,
+        "explanation": explanation,
+        "bus_id": explanation.get("bus_id") if explanation else None,
+    }
+    decision_log.append(entry)
+    if len(decision_log) > MAX_LOG_SIZE:
+        decision_log.pop(0)
+    system_logger.log(level, message, explanation.get("bus_id") if explanation else None)
+
+
+# ── Broadcasting ──────────────────────────────────────────────
+async def broadcast_msg(message: Dict[str, Any]) -> None:
+    dead: Set[WebSocket] = set()
+    for ws in connected_clients:
+        try:
+            await ws.send_json(message)
+        except Exception:
+            dead.add(ws)
+    connected_clients.difference_update(dead)
+
+
+async def broadcast_ping(ping: dict) -> None:
+    """Broadcast a position_update message."""
+    if ping.get("type") == "buffer_flush":
+        await broadcast_msg(ping)
+    else:
+        await broadcast_msg({
+            "type": "position_update",
+            "bus_id": ping.get("bus_id"),
+            "data": ping,
+            "buffer_size": ping.get("buffer_size", 0),
+        })
+
+
+# ── Lifespan ──────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global cached_routes, emitters, buffer_mgr, eta_model
+    global cached_routes, bus_emitters, buffer_mgr, sim_config, eta_model
 
-    # 1. Fetch OSRM routes
-    cached_routes = fetch_all_routes(ROUTE_DEFINITIONS)
+    # 1. Fetch OSRM routes for all 5 routes
+    cached_routes = fetch_all_routes(ROUTES)
 
-    # 2. Create emitters
-    emitters = create_emitters(cached_routes)
-    print(f"✓ Created {len(emitters)} bus emitters.")
+    # 2. Create sim config
+    sim_config = SimConfig()
 
-    # 3. Create per-bus buffers
-    buffer_mgr = BusBufferManager(list(BUS_DEFINITIONS.keys()))
+    # 3. Create buffer manager
+    buffer_mgr = BusBufferManager(list(BUSES.keys()))
 
-    # 4. Init state
-    init_bus_state()
+    # 4. Create emitters
+    for bus_id in BUSES:
+        route_id = BUSES[bus_id]["route_id"]
+        geometry = cached_routes.get(route_id, {}).get("geometry", [])
+        if not geometry:
+            # Fallback: use stop coordinates
+            geometry = [[s["lat"], s["lng"]] for s in ROUTES[route_id]["stops"]]
+        bus_emitters[bus_id] = BusEmitter(
+            bus_id=bus_id,
+            geometry=geometry,
+            sim_config=sim_config,
+            buffer_mgr=buffer_mgr,
+            broadcast_fn=broadcast_ping,
+            log_fn=log_decision,
+        )
+    print(f"[OK] Created {len(bus_emitters)} bus emitters.")
 
     # 5. Load ML model
     if os.path.exists(MODEL_PATH):
         eta_model = joblib.load(MODEL_PATH)
-        print(f"✓ ETA model loaded from {MODEL_PATH}")
-        system_logger.info("ETA model loaded.")
+        print(f"[OK] ETA model loaded from {MODEL_PATH}")
     else:
-        print(f"⚠ ETA model not found at {MODEL_PATH}")
-        system_logger.warn("ETA model not found. Predictions will use heuristic.")
-
-    system_logger.info("System started — 3 buses active.")
+        print(f"[WARN] ETA model not found at {MODEL_PATH}")
 
     # 6. Launch tasks
     tasks = []
-    for bus_id in emitters:
-        tasks.append(asyncio.create_task(bus_simulation_loop(bus_id)))
+    for bus_id, emitter in bus_emitters.items():
+        tasks.append(asyncio.create_task(emitter.run()))
     heartbeat_task = asyncio.create_task(heartbeat_loop())
+
+    print(f"[OK] System started — {len(BUSES)} buses active.")
 
     yield
 
-    # Cleanup
     for t in tasks:
         t.cancel()
     heartbeat_task.cancel()
 
 
-# ---------------------------------------------------------------------------
-# FastAPI App
-# ---------------------------------------------------------------------------
+# ── Heartbeat ─────────────────────────────────────────────────
 
-app = FastAPI(title="Resilient Transport Tracker", version="3.0.0", lifespan=lifespan)
+async def heartbeat_loop():
+    try:
+        while True:
+            await asyncio.sleep(1)
+            buses_hb = {}
+            for bus_id, emitter in bus_emitters.items():
+                st = emitter.state
+                buses_hb[bus_id] = {
+                    "signal_strength": st.signal_strength,
+                    "buffer_size": st.buffer_size,
+                    "is_ghost": st.is_ghost,
+                    "traffic_level": st.traffic_level,
+                    "confidence_score": st.eta_confidence,
+                    "in_dead_zone": st.in_dead_zone,
+                    "dead_zone": {"name": st.dead_zone["name"], "severity": st.dead_zone["severity"]} if st.dead_zone else None,
+                }
+            await broadcast_msg({
+                "type": "heartbeat",
+                "buses": buses_hb,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+    except asyncio.CancelledError:
+        pass
+
+
+# ── FastAPI App ───────────────────────────────────────────────
+
+app = FastAPI(title="Resilient Transport Tracker", version="5.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -138,160 +186,40 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Broadcasting
-# ---------------------------------------------------------------------------
-
-async def broadcast(message: Dict[str, Any]) -> None:
-    dead: Set[WebSocket] = set()
-    for ws in connected_clients:
-        try:
-            await ws.send_json(message)
-        except Exception:
-            dead.add(ws)
-    connected_clients.difference_update(dead)
-
-
-# ---------------------------------------------------------------------------
-# Per-Bus Simulation Loop
-# ---------------------------------------------------------------------------
-
-async def bus_simulation_loop(bus_id: str) -> None:
-    """Independent simulation task for one bus. Crash-isolated."""
-    emitter = emitters[bus_id]
-    bstate = bus_state[bus_id]
-    bcfg = bus_configs[bus_id]
-
-    try:
-        while True:
-            await asyncio.sleep(SIMULATION_TICK_S)
-
-            # 1. Physics
-            emitter.update(SIMULATION_TICK_S)
-
-            # 2. Signal with drift
-            effective_signal = emitter.drift_signal()
-
-            # 3. Build ping
-            interval = get_effective_ping_interval(effective_signal, sim_config.packet_loss)
-            now = time.monotonic()
-
-            if interval is None:
-                # Dead zone — buffer
-                ping = emitter.create_ping(effective_signal, ping_type="ghost")
-                bstate["last_ping"] = ping
-
-                if buffer_mgr.size(bus_id) < sim_config.buffer_size_limit:
-                    buffer_mgr.store(bus_id, emitter.create_ping(effective_signal, ping_type="buffered"))
-                system_logger.buffer_storing(bus_id, buffer_mgr.size(bus_id))
-
-                if not bstate["was_dead"]:
-                    system_logger.ghost_activated(bus_id)
-                bstate["was_dead"] = True
-
-                # Broadcast ghost ping so marker appears translucent
-                await broadcast({
-                    "type": "position_update",
-                    "bus_id": bus_id,
-                    "data": ping,
-                    "buffer_size": buffer_mgr.size(bus_id),
-                })
-            else:
-                # Signal recovered — flush buffer first
-                if bstate["was_dead"] and buffer_mgr.size(bus_id) > 0:
-                    flushed = buffer_mgr.flush(bus_id)
-                    await broadcast({
-                        "type": "buffer_flush",
-                        "bus_id": bus_id,
-                        "pings": flushed,
-                        "buffer_size": 0,
-                    })
-                    system_logger.buffer_flushed(bus_id, len(flushed))
-                    system_logger.ghost_deactivated(bus_id)
-                bstate["was_dead"] = False
-
-                # Normal emit at tier cadence
-                if now - bstate["last_emit_time"] >= interval:
-                    bstate["last_emit_time"] = now
-                    bstate["last_real_ping_time"] = now
-                    ping = emitter.create_ping(effective_signal, ping_type="real")
-                    bstate["last_ping"] = ping
-
-                    await broadcast({
-                        "type": "position_update",
-                        "bus_id": bus_id,
-                        "data": ping,
-                        "buffer_size": buffer_mgr.size(bus_id),
-                    })
-
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        system_logger.critical(f"[{bus_id}] Emitter crashed: {e}", bus_id)
-        print(f"ERROR: Bus {bus_id} emitter crashed: {e}")
-
-
-# ---------------------------------------------------------------------------
-# Heartbeat Loop (all buses at once)
-# ---------------------------------------------------------------------------
-
-async def heartbeat_loop() -> None:
-    try:
-        while True:
-            await asyncio.sleep(HEARTBEAT_INTERVAL_S)
-            buses_heartbeat = {}
-            for bus_id in BUS_DEFINITIONS:
-                ping = bus_state.get(bus_id, {}).get("last_ping")
-                bcfg = bus_configs.get(bus_id)
-                effective_signal = ping["signal_strength"] if ping else (bcfg.signal_strength if bcfg else 85)
-                buses_heartbeat[bus_id] = {
-                    "signal_strength": effective_signal,
-                    "buffer_size": buffer_mgr.size(bus_id) if buffer_mgr else 0,
-                    "is_ghost": bus_state.get(bus_id, {}).get("was_dead", False),
-                    "traffic_level": get_traffic_label(bcfg.traffic_level) if bcfg else "medium",
-                }
-
-            await broadcast({
-                "type": "heartbeat",
-                "buses": buses_heartbeat,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-    except asyncio.CancelledError:
-        pass
-
-
-# ---------------------------------------------------------------------------
-# WebSocket
-# ---------------------------------------------------------------------------
+# ── WebSocket ─────────────────────────────────────────────────
 
 @app.websocket("/ws/client")
 async def ws_client_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
 
-    # Send init with routes + current bus states
+    # Build init payload
     routes_payload = {}
     for route_id, rdata in cached_routes.items():
         routes_payload[route_id] = {
-            "name": rdata["name"],
-            "color_id": rdata["color_id"],
-            "stops": rdata["stops"],
-            "geometry": rdata["geometry"],
-            "stop_indices": rdata["stop_indices"],
-            "distance_km": rdata["distance_km"],
+            "name": rdata.get("name", ""),
+            "color": ROUTES[route_id]["color"],
+            "stops": rdata.get("stops", ROUTES[route_id]["stops"]),
+            "geometry": rdata.get("geometry", []),
+            "distance_km": rdata.get("distance_km", 0),
+            "dead_zones": get_dead_zones_for_route(route_id),
         }
 
     buses_payload = {}
-    for bus_id, bdef in BUS_DEFINITIONS.items():
+    for bus_id, emitter in bus_emitters.items():
+        st = emitter.state
+        bus_def = BUSES[bus_id]
         buses_payload[bus_id] = {
             "id": bus_id,
-            "route_id": bdef["route_id"],
-            "label": bdef["label"],
-            "last_ping": bus_state.get(bus_id, {}).get("last_ping"),
-            "signal_strength": bus_configs[bus_id].signal_strength,
-            "traffic_level": get_traffic_label(bus_configs[bus_id].traffic_level),
-            "is_ghost": bus_state.get(bus_id, {}).get("was_dead", False),
-            "buffer_size": buffer_mgr.size(bus_id) if buffer_mgr else 0,
+            "route_id": bus_def["route_id"],
+            "label": bus_def["label"],
+            "route_name": bus_def["route_name"],
+            "color": bus_def["color"],
+            "signal_strength": st.signal_strength,
+            "traffic_level": st.traffic_level,
+            "is_ghost": st.is_ghost,
+            "buffer_size": st.buffer_size,
+            "last_ping": emitter._build_ping(),
         }
 
     try:
@@ -299,6 +227,8 @@ async def ws_client_endpoint(websocket: WebSocket):
             "type": "init",
             "routes": routes_payload,
             "buses": buses_payload,
+            "dead_zones": DEAD_ZONES,
+            "mitaoe": MITAOE_DESTINATION,
         })
     except Exception:
         connected_clients.discard(websocket)
@@ -311,21 +241,19 @@ async def ws_client_endpoint(websocket: WebSocket):
         connected_clients.discard(websocket)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# REST Endpoints
-# ═══════════════════════════════════════════════════════════════════════
+# ── REST Endpoints ────────────────────────────────────────────
 
 @app.get("/api/routes")
 async def get_routes():
     result = {}
     for route_id, rdata in cached_routes.items():
         result[route_id] = {
-            "name": rdata["name"],
-            "color_id": rdata["color_id"],
-            "stops": rdata["stops"],
-            "geometry": rdata["geometry"],
-            "stop_indices": rdata["stop_indices"],
-            "distance_km": rdata["distance_km"],
+            "name": rdata.get("name", ""),
+            "color": ROUTES[route_id]["color"],
+            "stops": rdata.get("stops", ROUTES[route_id]["stops"]),
+            "geometry": rdata.get("geometry", []),
+            "distance_km": rdata.get("distance_km", 0),
+            "dead_zones": get_dead_zones_for_route(route_id),
         }
     return result
 
@@ -333,41 +261,48 @@ async def get_routes():
 @app.get("/api/buses")
 async def get_buses():
     result = {}
-    for bus_id, bdef in BUS_DEFINITIONS.items():
-        bcfg = bus_configs[bus_id]
+    for bus_id, emitter in bus_emitters.items():
+        st = emitter.state
+        bus_def = BUSES[bus_id]
         result[bus_id] = {
             "id": bus_id,
-            "route_id": bdef["route_id"],
-            "label": bdef["label"],
-            "base_speed_kmh": bdef["base_speed_kmh"],
-            "signal_strength": bcfg.signal_strength,
-            "traffic_level": get_traffic_label(bcfg.traffic_level),
-            "is_ghost": bus_state.get(bus_id, {}).get("was_dead", False),
-            "buffer_size": buffer_mgr.size(bus_id) if buffer_mgr else 0,
-            "last_ping": bus_state.get(bus_id, {}).get("last_ping"),
+            "route_id": bus_def["route_id"],
+            "label": bus_def["label"],
+            "route_name": bus_def["route_name"],
+            "color": bus_def["color"],
+            "signal_strength": st.signal_strength,
+            "traffic_level": st.traffic_level,
+            "is_ghost": st.is_ghost,
+            "buffer_size": st.buffer_size,
+            "confidence_score": st.eta_confidence,
+            "in_dead_zone": st.in_dead_zone,
+            "last_ping": emitter._build_ping(),
         }
     return result
 
 
-# Signal for a specific bus
-class SignalRequest(BaseModel):
-    strength: int = Field(..., ge=0, le=100)
-    bus_id: Optional[str] = None
+@app.get("/api/dead-zones")
+async def get_dead_zones():
+    """Return all dead zone definitions with route geometry segments."""
+    result = []
+    for dz in DEAD_ZONES:
+        entry = {**dz}
+        # Add geometry segments for each affected route
+        segments = []
+        for rid in dz["route_ids"]:
+            route_stops = ROUTES.get(rid, {}).get("stops", [])
+            for si in dz["affected_stop_indices"]:
+                if si < len(route_stops) and si + 1 < len(route_stops):
+                    segments.append({
+                        "route_id": rid,
+                        "from_stop": route_stops[si],
+                        "to_stop": route_stops[si + 1],
+                    })
+        entry["segments"] = segments
+        result.append(entry)
+    return result
 
 
-@app.post("/api/signal")
-async def set_signal(payload: SignalRequest):
-    targets = [payload.bus_id] if payload.bus_id else list(BUS_DEFINITIONS.keys())
-    for bid in targets:
-        if bid in bus_configs:
-            old = bus_configs[bid].signal_strength
-            bus_configs[bid].signal_strength = payload.strength
-            if old != payload.strength:
-                system_logger.signal_changed(bid, old, payload.strength)
-    return {"signal_strength": payload.strength, "targets": targets}
-
-
-# Sim Config (with optional bus_id for per-bus targeting)
 class SimConfigRequest(BaseModel):
     bus_id: Optional[str] = None
     signal_strength: Optional[int] = Field(None, ge=0, le=100)
@@ -382,92 +317,53 @@ class SimConfigRequest(BaseModel):
 
 @app.post("/api/sim-config")
 async def update_sim_config(payload: SimConfigRequest):
-    targets = [payload.bus_id] if payload.bus_id else list(BUS_DEFINITIONS.keys())
-
-    # Per-bus settings
-    if payload.signal_strength is not None:
-        for bid in targets:
-            if bid in bus_configs:
-                old = bus_configs[bid].signal_strength
-                bus_configs[bid].signal_strength = payload.signal_strength
-                if old != payload.signal_strength:
-                    system_logger.signal_changed(bid, old, payload.signal_strength)
-
-    if payload.traffic_level is not None:
-        for bid in targets:
-            if bid in bus_configs:
-                bus_configs[bid].traffic_level = payload.traffic_level
-        system_logger.sim_config_applied("traffic", get_traffic_label(payload.traffic_level), payload.bus_id)
-
-    # Global settings
-    if payload.packet_loss is not None:
-        sim_config.packet_loss = payload.packet_loss
-        system_logger.sim_config_applied("packet_loss", payload.packet_loss, payload.bus_id)
-    if payload.latency_ms is not None:
-        sim_config.latency_ms = payload.latency_ms
-        system_logger.sim_config_applied("latency", payload.latency_ms, payload.bus_id)
-    if payload.weather is not None:
-        sim_config.weather = payload.weather
-        labels = {0: "Clear", 1: "Cloudy", 2: "Rain"}
-        system_logger.sim_config_applied("weather", labels.get(payload.weather), payload.bus_id)
-    if payload.buffer_size_limit is not None:
-        sim_config.buffer_size_limit = payload.buffer_size_limit
-        if buffer_mgr:
-            buffer_mgr.set_all_max_size(payload.buffer_size_limit)
-        system_logger.sim_config_applied("buffer_limit", payload.buffer_size_limit, payload.bus_id)
-    if payload.interpolation_mode is not None:
-        sim_config.interpolation_mode = payload.interpolation_mode
-
-    # Build response
-    per_bus = {}
-    for bid in targets:
-        bcfg = bus_configs.get(bid)
-        if bcfg:
-            per_bus[bid] = {
-                "signal_strength": bcfg.signal_strength,
-                "traffic_level": get_traffic_label(bcfg.traffic_level),
-            }
-
-    return {
-        "status": "applied",
-        "targets": targets,
-        "global_config": sim_config.to_dict(),
-        "bus_configs": per_bus,
-    }
+    data = payload.dict(exclude_none=True)
+    bus_id = data.pop("bus_id", None)
+    sim_config.update(data, bus_id)
+    return {"status": "applied", "bus_id": bus_id}
 
 
-# Trip status
+class SignalRequest(BaseModel):
+    strength: int = Field(..., ge=0, le=100)
+    bus_id: Optional[str] = None
+
+
+@app.post("/api/signal")
+async def set_signal(payload: SignalRequest):
+    sim_config.update({"signal_strength": payload.strength}, payload.bus_id)
+    return {"signal_strength": payload.strength, "bus_id": payload.bus_id}
+
+
 @app.get("/api/trip-status")
 async def get_trip_status(bus_id: Optional[str] = Query(None)):
-    target_ids = [bus_id] if bus_id else list(emitters.keys())
+    target_ids = [bus_id] if bus_id else list(bus_emitters.keys())
     result = {}
     for bid in target_ids:
-        em = emitters.get(bid)
-        bs = bus_state.get(bid, {})
+        em = bus_emitters.get(bid)
         if not em:
             continue
-        now = time.monotonic()
-        elapsed = now - bs.get("trip_start_time", now)
-        route_data = cached_routes.get(em.route_id, {})
+        st = em.state
+        route_data = cached_routes.get(st.route_id, {})
+        total_stops = len(ROUTES[st.route_id]["stops"])
         result[bid] = {
             "bus_id": bid,
-            "label": em.label,
-            "route_id": em.route_id,
-            "current_stop_index": em.get_current_stop_index(),
-            "stops_remaining": em.get_stops_remaining(),
-            "next_stop": em.get_next_stop_name(),
-            "elapsed_minutes": round(elapsed / 60, 1),
-            "current_speed_kmh": round(em._speed_kmh, 1),
-            "distance_covered_km": round(em.get_distance_covered_km(), 2),
+            "label": st.label,
+            "route_id": st.route_id,
+            "current_stop_index": st.stop_index,
+            "stops_remaining": max(0, total_stops - st.stop_index - 1),
+            "next_stop": ROUTES[st.route_id]["stops"][min(st.stop_index + 1, total_stops - 1)]["name"],
+            "current_speed_kmh": round(st.speed_kmh, 1),
+            "distance_covered_km": round(route_data.get("distance_km", 0) * st.route_progress, 2),
             "total_route_km": route_data.get("distance_km", 0),
-            "buffer_count": buffer_mgr.size(bid) if buffer_mgr else 0,
-            "is_ghost": bs.get("was_dead", False),
-            "route_progress": round(em.get_route_progress(), 4),
+            "buffer_count": st.buffer_size,
+            "is_ghost": st.is_ghost,
+            "route_progress": round(st.route_progress, 4),
+            "confidence_score": st.eta_confidence,
+            "in_dead_zone": st.in_dead_zone,
         }
     return result
 
 
-# ETA Prediction
 class ETARequest(BaseModel):
     departure_time: int = Field(..., ge=0, le=23)
     day_of_week: int = Field(..., ge=0, le=6)
@@ -502,12 +398,17 @@ async def predict_eta(req: ETARequest):
     margin = predicted * margin_pct
     now = datetime.now()
     arrival = now + timedelta(minutes=predicted)
+    lo_arrival = now + timedelta(minutes=max(0, predicted - margin))
+    hi_arrival = now + timedelta(minutes=predicted + margin)
 
     return {
         "predicted_remaining_minutes": round(predicted, 1),
         "predicted_arrival_time": arrival.strftime("%H:%M"),
+        "arrival_range_low": lo_arrival.strftime("%H:%M"),
+        "arrival_range_high": hi_arrival.strftime("%H:%M"),
         "confidence_low": round(max(0, predicted - margin), 1),
         "confidence_high": round(predicted + margin, 1),
+        "confidence_margin_minutes": round(margin, 1),
         "confidence_width": width_label,
         "signal_penalty_applied": sig < 40,
         "model_version": "gradient_boosting_v1" if eta_model else "heuristic_fallback",
@@ -515,13 +416,12 @@ async def predict_eta(req: ETARequest):
     }
 
 
-# System Log
 @app.get("/api/system-log")
 async def get_system_log(bus_id: Optional[str] = Query(None)):
-    return system_logger.get_recent(20, bus_id)
+    if bus_id:
+        return [e for e in decision_log if e.get("bus_id") == bus_id][-20:]
+    return decision_log[-20:]
 
-
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn

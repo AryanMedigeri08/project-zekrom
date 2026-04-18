@@ -4,9 +4,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ----------------------------------------------------------------
-   Global Styles — Light Mode, Multi-Bus, Hybrid 2D/3D
-   ---------------------------------------------------------------- */
+/* ================================================================
+   Phase 5 — Light Mode, 5 Buses, Dead Zones, Hybrid 2D/3D
+   ================================================================ */
 
 :root {
   --color-cyan: #0d9488;
@@ -18,9 +18,6 @@
   --signal-green: #22c55e;
   --signal-yellow: #eab308;
   --signal-red: #ef4444;
-  --traffic-green: #22c55e;
-  --traffic-yellow: #eab308;
-  --traffic-red: #ef4444;
 }
 
 .leaflet-container:focus { outline: none; }
@@ -31,108 +28,76 @@
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* ----------------------------------------------------------------
-   2D Bus Marker — Signal strength color coded
-   ---------------------------------------------------------------- */
-.bus-marker-dot {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 3px solid #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* ================================================================
+   Square Map Container
+   ================================================================ */
+.map-wrapper {
   position: relative;
-  background: var(--marker-color, #22c55e);
-  box-shadow:
-    0 0 0 2px rgba(0,0,0,0.08),
-    0 2px 8px rgba(0,0,0,0.15);
-  z-index: 10;
-  cursor: pointer;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 640px;
+  flex-shrink: 0;
 }
-
-.bus-marker-dot:hover {
-  transform: scale(1.15);
-  filter: brightness(1.15);
-}
-
-.bus-marker-dot .bus-label {
-  font-size: 7px;
-  font-weight: 800;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  letter-spacing: 0.3px;
-  line-height: 1;
-}
-
-.bus-marker-dot .pulse-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
+.map-wrapper > div {
   width: 100%;
   height: 100%;
+}
+
+/* ================================================================
+   Card Panel
+   ================================================================ */
+.card-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* ================================================================
+   Stop Marker
+   ================================================================ */
+.stop-marker {
+  width: 10px;
+  height: 10px;
+  background: var(--color-blue);
+  border: 2px solid #fff;
   border-radius: 50%;
-  border: 2px solid var(--marker-color, #22c55e);
-  transform: translate(-50%, -50%) scale(1);
-  opacity: 0.6;
-  animation: marker-pulse 2s ease-out infinite;
-  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
-@keyframes marker-pulse {
-  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
-}
-
-/* ----------------------------------------------------------------
-   2D Ghost Bus Marker
-   ---------------------------------------------------------------- */
-.bus-marker-ghost {
-  width: 32px;
-  height: 32px;
+/* ================================================================
+   Signal Indicator
+   ================================================================ */
+.signal-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 2.5px dashed rgba(100, 116, 139, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  background: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  opacity: 0.6;
-  animation: ghost-fade 2.5s ease-in-out infinite;
-  z-index: 5;
-  cursor: pointer;
+  display: inline-block;
+}
+.signal-dot.online {
+  background: var(--signal-green);
+  box-shadow: 0 0 6px var(--signal-green);
+  animation: signal-blink 1.5s infinite;
+}
+.signal-dot.degraded {
+  background: var(--signal-yellow);
+  box-shadow: 0 0 6px var(--signal-yellow);
+  animation: signal-blink 2.5s infinite;
+}
+.signal-dot.offline {
+  background: var(--signal-red);
+  box-shadow: 0 0 6px var(--signal-red);
+  animation: signal-blink 0.8s infinite;
 }
 
-.bus-marker-ghost .bus-label {
-  font-size: 6px;
-  font-weight: 800;
-  color: #94a3b8;
-  letter-spacing: 0.3px;
+@keyframes signal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-.bus-marker-ghost .est-label {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 3px;
-  font-size: 7px;
-  font-weight: 700;
-  color: var(--color-orange);
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
-}
-
-@keyframes ghost-fade {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.75; }
-}
-
-/* ----------------------------------------------------------------
+/* ================================================================
    3D Bus Marker (Mapbox)
-   ---------------------------------------------------------------- */
+   ================================================================ */
 .bus-marker-3d {
   position: relative;
   width: 48px;
@@ -153,16 +118,10 @@
   position: relative;
   z-index: 2;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  transition: border-color 0.5s ease, opacity 0.3s ease;
+  transition: border-color 0.5s ease;
 }
 
-.marker-icon {
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
+.marker-icon { line-height: 1; }
 .marker-label {
   font-size: 8px;
   color: #e2e8f0;
@@ -197,22 +156,14 @@
 }
 
 @keyframes pulse3d {
-  0%   { transform: translate(-50%,-50%) scale(0.8); opacity: 0.8; }
+  0% { transform: translate(-50%,-50%) scale(0.8); opacity: 0.8; }
   100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; }
 }
 
-/* Ghost mode in 3D */
 .ghost-mode-3d .marker-body-3d {
   opacity: 0.4;
   border-style: dashed;
-  border-color: #ffffff !important;
 }
-
-.ghost-mode-3d .pulse-3d {
-  background: rgba(255,255,255,0.1) !important;
-  border-color: rgba(255,255,255,0.3) !important;
-}
-
 .ghost-mode-3d::after {
   content: 'ESTIMATED';
   position: absolute;
@@ -224,15 +175,13 @@
   color: #f97316;
   letter-spacing: 1px;
   white-space: nowrap;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
 
-/* Mapbox container */
 .mapboxgl-map { width: 100%; height: 100%; }
 
-/* ----------------------------------------------------------------
+/* ================================================================
    Transition Overlay (2D ↔ 3D)
-   ---------------------------------------------------------------- */
+   ================================================================ */
 .transition-overlay {
   position: fixed;
   inset: 0;
@@ -245,9 +194,9 @@
 }
 
 @keyframes overlayFade {
-  0%   { opacity: 0; }
-  15%  { opacity: 1; }
-  80%  { opacity: 1; }
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
   100% { opacity: 0; }
 }
 
@@ -268,7 +217,6 @@
 .transition-sub {
   color: #94a3b8;
   font-size: 13px;
-  font-weight: 500;
 }
 
 .transition-bar {
@@ -289,64 +237,35 @@
 
 @keyframes barFill {
   from { width: 0%; }
-  to   { width: 100%; }
+  to { width: 100%; }
 }
 
-/* ----------------------------------------------------------------
-   Stop Marker
-   ---------------------------------------------------------------- */
-.stop-marker {
-  width: 10px;
-  height: 10px;
-  background: var(--color-blue);
-  border: 2px solid #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-/* ----------------------------------------------------------------
-   Card Panel (Light Mode)
-   ---------------------------------------------------------------- */
-.card-panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+/* ================================================================
+   Dead Zone Popup
+   ================================================================ */
+.dead-zone-popup .leaflet-popup-content-wrapper {
   border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  padding: 0;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+}
+.dead-zone-popup .leaflet-popup-content {
+  margin: 12px 16px;
+}
+.dead-zone-popup .leaflet-popup-tip {
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-/* ----------------------------------------------------------------
-   Signal Indicator
-   ---------------------------------------------------------------- */
-.signal-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.signal-dot.online {
-  background: var(--signal-green);
-  box-shadow: 0 0 6px var(--signal-green);
-  animation: signal-blink 1.5s infinite;
-}
-.signal-dot.degraded {
-  background: var(--signal-yellow);
-  box-shadow: 0 0 6px var(--signal-yellow);
-  animation: signal-blink 2.5s infinite;
-}
-.signal-dot.offline {
-  background: var(--signal-red);
-  box-shadow: 0 0 6px var(--signal-red);
-  animation: signal-blink 0.8s infinite;
+/* ================================================================
+   Dead Zone Pulse (on polyline hover areas)
+   ================================================================ */
+@keyframes deadZonePulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.45; }
 }
 
-@keyframes signal-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-/* ----------------------------------------------------------------
-   Range Slider (Light Mode)
-   ---------------------------------------------------------------- */
+/* ================================================================
+   Range Slider
+   ================================================================ */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -363,7 +282,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--color-cyan);
   border: 2px solid #fff;
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px;
@@ -374,9 +293,9 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* ----------------------------------------------------------------
-   Tooltip (CSS-only)
-   ---------------------------------------------------------------- */
+/* ================================================================
+   Tooltip (CSS only)
+   ================================================================ */
 .info-tooltip {
   position: relative;
   display: inline-flex;
@@ -415,9 +334,9 @@ input[type="range"]::-moz-range-thumb {
   opacity: 1;
 }
 
-/* ----------------------------------------------------------------
-   Map Legend Control
-   ---------------------------------------------------------------- */
+/* ================================================================
+   Map Legend
+   ================================================================ */
 .map-legend {
   background: rgba(255,255,255,0.95);
   backdrop-filter: blur(8px);
@@ -455,9 +374,25 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
 }
 
-/* ----------------------------------------------------------------
-   Leaflet marker hover effect (3D hint)
-   ---------------------------------------------------------------- */
+/* ================================================================
+   Simulation Drawer slide-up animation
+   ================================================================ */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ================================================================
+   Leaflet marker hover
+   ================================================================ */
 .leaflet-marker-icon {
   transition: transform 0.15s ease, filter 0.15s ease;
+}
+.leaflet-marker-icon:hover {
+  transform: scale(1.1);
+  filter: brightness(1.1);
 }
