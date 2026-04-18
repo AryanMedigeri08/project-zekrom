@@ -1,130 +1,89 @@
 """
-System Decision Logger.
+System Decision Logger — Phase 3 (bus_id aware).
 
-Captures timestamped system events (signal changes, buffer activity,
-mode switches) for display in the frontend's System Decision Log panel.
-
-Designed to be used server-side — the frontend polls /api/system-log
-every 2 seconds.
+Captures timestamped system events with optional bus_id context.
 """
 
 from collections import deque
 from datetime import datetime, timezone
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import threading
 
 
 @dataclass
 class LogEntry:
-    """One system decision event."""
-    timestamp: str       # ISO-8601
-    level: str           # "info" | "warn" | "critical"
+    timestamp: str
+    level: str       # "info" | "warn" | "critical"
     message: str
+    bus_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "timestamp": self.timestamp,
-            "level": self.level,
-            "message": self.message,
-        }
+        d = {"timestamp": self.timestamp, "level": self.level, "message": self.message}
+        if self.bus_id:
+            d["bus_id"] = self.bus_id
+        return d
 
 
 class SystemLogger:
-    """
-    Thread-safe ring-buffer logger.
+    """Thread-safe ring-buffer logger with bus_id support."""
 
-    Stores the last `max_entries` system decisions.  The frontend polls
-    these periodically to render the decision-log panel.
-    """
-
-    def __init__(self, max_entries: int = 50) -> None:
+    def __init__(self, max_entries: int = 80) -> None:
         self._entries: deque[LogEntry] = deque(maxlen=max_entries)
         self._lock = threading.Lock()
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).strftime("%H:%M:%S")
 
-    def log(self, message: str, level: str = "info") -> None:
-        """Append a new log entry."""
-        entry = LogEntry(
-            timestamp=self._now(),
-            level=level,
-            message=message,
-        )
+    def log(self, message: str, level: str = "info", bus_id: Optional[str] = None) -> None:
+        entry = LogEntry(timestamp=self._now(), level=level, message=message, bus_id=bus_id)
         with self._lock:
             self._entries.append(entry)
 
-    def info(self, message: str) -> None:
-        self.log(message, "info")
+    def info(self, msg: str, bus_id: Optional[str] = None): self.log(msg, "info", bus_id)
+    def warn(self, msg: str, bus_id: Optional[str] = None): self.log(msg, "warn", bus_id)
+    def critical(self, msg: str, bus_id: Optional[str] = None): self.log(msg, "critical", bus_id)
 
-    def warn(self, message: str) -> None:
-        self.log(message, "warn")
-
-    def critical(self, message: str) -> None:
-        self.log(message, "critical")
-
-    def get_recent(self, count: int = 20) -> List[Dict[str, Any]]:
-        """Return the last `count` entries as dicts (newest last)."""
+    def get_recent(self, count: int = 20, bus_id: Optional[str] = None) -> List[Dict[str, Any]]:
         with self._lock:
             entries = list(self._entries)
+        if bus_id:
+            entries = [e for e in entries if e.bus_id is None or e.bus_id == bus_id]
         return [e.to_dict() for e in entries[-count:]]
 
-    # ------------------------------------------------------------------
-    # Convenience methods for common events
-    # ------------------------------------------------------------------
-
-    def signal_changed(self, old: int, new: int) -> None:
-        """Log a signal strength change with appropriate level."""
-        direction = "↑" if new > old else "↓"
+    # Convenience methods
+    def signal_changed(self, bus_id: str, old: int, new: int):
+        label = bus_id.upper().replace("_", "-")
+        direction = "up" if new > old else "down"
         if new < 10:
-            self.critical(
-                f"Signal dropped to {new}%. Entering dead zone — "
-                f"pings will be buffered."
-            )
+            self.critical(f"[{label}] Signal dropped to {new}%. Dead zone — buffering.", bus_id)
         elif new < 40:
-            self.warn(
-                f"Signal {direction} to {new}%. Switching to sparse mode. "
-                f"Ping interval → 12s"
-            )
+            self.warn(f"[{label}] Signal {direction} to {new}%. Sparse mode (12s).", bus_id)
         elif new < 70:
-            self.info(
-                f"Signal {direction} to {new}%. Moderate quality. "
-                f"Ping interval → 6s"
-            )
+            self.info(f"[{label}] Signal {direction} to {new}%. Good mode (6s).", bus_id)
         else:
-            self.info(
-                f"Signal {direction} to {new}%. Excellent quality. "
-                f"Ping interval → 2s"
-            )
+            self.info(f"[{label}] Signal {direction} to {new}%. Excellent (2s).", bus_id)
 
-    def buffer_storing(self, buffer_size: int) -> None:
-        if buffer_size % 5 == 0 and buffer_size > 0:  # log every 5 pings
-            pct = min(100, int(buffer_size / 50 * 100))  # assume default cap=50
-            self.warn(
-                f"Buffer capacity at {pct}%. {buffer_size} pings stored offline."
-            )
+    def buffer_storing(self, bus_id: str, count: int):
+        if count > 0 and count % 5 == 0:
+            self.warn(f"[{bus_id.upper()}] {count} pings buffered offline.", bus_id)
 
-    def buffer_flushed(self, count: int) -> None:
-        self.info(
-            f"Signal restored. Flushing {count} buffered pings to frontend."
-        )
+    def buffer_flushed(self, bus_id: str, count: int):
+        self.info(f"[{bus_id.upper()}] Signal restored — flushing {count} pings.", bus_id)
 
-    def ghost_activated(self) -> None:
-        self.warn("Ghost bus activated — showing estimated position on map.")
+    def ghost_activated(self, bus_id: str):
+        self.warn(f"[{bus_id.upper()}] Ghost bus activated.", bus_id)
 
-    def ghost_deactivated(self) -> None:
-        self.info("Ghost bus deactivated — live tracking resumed.")
+    def ghost_deactivated(self, bus_id: str):
+        self.info(f"[{bus_id.upper()}] Ghost deactivated — live tracking resumed.", bus_id)
 
-    def sim_config_applied(self, key: str, value: Any) -> None:
-        self.info(f"Simulation config updated: {key} → {value}")
+    def sim_config_applied(self, key: str, value: Any, bus_id: Optional[str] = None):
+        target = f"[{bus_id.upper()}]" if bus_id else "[ALL]"
+        self.info(f"{target} Config: {key} -> {value}", bus_id)
 
-    def scenario_applied(self, name: str) -> None:
-        self.info(f"Preset scenario applied: {name}")
+    def scenario_applied(self, name: str, bus_id: Optional[str] = None):
+        target = f"[{bus_id.upper()}]" if bus_id else "[ALL]"
+        self.info(f"{target} Scenario applied: {name}", bus_id)
 
-
-# ---------------------------------------------------------------------------
-# Module-level singleton
-# ---------------------------------------------------------------------------
 
 system_logger = SystemLogger()

@@ -1,55 +1,40 @@
 /**
- * useSimConfig — Centralized state management for the What-If Simulation Dashboard.
- *
- * Holds all slider/toggle values in a single state object, computes derived values
- * (ping interval, payload size, cone width, buffer risk), and pushes config changes
- * to the backend via POST /api/sim-config with 300ms debounce.
+ * useSimConfig — Multi-bus simulation config with bus_id targeting.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 const API_BASE = 'http://localhost:8000';
 
-// Default simulation configuration matching backend SimConfig defaults
 const DEFAULT_CONFIG = {
   signal_strength: 85,
   packet_loss: 5,
   latency_ms: 100,
-  bus_speed_override: 40,
-  traffic_level: 1,  // 0=low, 1=medium, 2=high
-  weather: 0,        // 0=clear, 1=cloudy, 2=rain
+  bus_speed_override: 0,
+  traffic_level: 1,
+  weather: 0,
   buffer_size_limit: 50,
-  interpolation_mode: 'smooth', // "smooth" | "literal"
+  interpolation_mode: 'smooth',
 };
 
 export default function useSimConfig() {
   const [config, setConfig] = useState({ ...DEFAULT_CONFIG });
-  const [derivedValues, setDerivedValues] = useState(null);
+  const [targetBusId, setTargetBusId] = useState(null); // null = all buses
   const [activeScenario, setActiveScenario] = useState(null);
   const debounceTimer = useRef(null);
 
-  // ---------------------------------------------------------------
-  // Compute derived values locally (mirror of backend logic)
-  // ---------------------------------------------------------------
-  const localDerived = useMemo(() => {
+  // Derived values (local computation)
+  const derived = useMemo(() => {
     const sig = config.signal_strength;
-
-    // Ping interval
     let baseInterval = null;
     if (sig >= 70) baseInterval = 2;
     else if (sig >= 40) baseInterval = 6;
     else if (sig >= 10) baseInterval = 12;
     const lossFactor = 1.0 + (config.packet_loss / 100) * 0.5;
     const effectiveInterval = baseInterval ? baseInterval * lossFactor : null;
-
-    // Payload
     const payloadSize = sig >= 70 ? 256 : sig >= 40 ? 128 : 64;
     const payloadMode = sig >= 70 ? 'full' : sig >= 40 ? 'compressed' : 'minimal';
-
-    // Confidence
     const confidenceWidth = sig >= 70 ? 'narrow' : sig >= 40 ? 'medium' : 'wide';
-
-    // Buffer risk
     let bufferRisk = 'low';
     if (sig < 10) bufferRisk = 'high';
     else if (sig < 40 || config.packet_loss > 25) bufferRisk = 'medium';
@@ -65,67 +50,39 @@ export default function useSimConfig() {
     };
   }, [config]);
 
-  // Use server-derived values if available, otherwise local
-  const derived = derivedValues || localDerived;
-
-  // ---------------------------------------------------------------
-  // Push config to backend (debounced 300ms)
-  // ---------------------------------------------------------------
-  const pushToBackend = useCallback(async (newConfig) => {
+  const pushToBackend = useCallback(async (newConfig, busId = null) => {
     try {
-      const resp = await fetch(`${API_BASE}/api/sim-config`, {
+      const body = { ...newConfig };
+      if (busId) body.bus_id = busId;
+      await fetch(`${API_BASE}/api/sim-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig),
+        body: JSON.stringify(body),
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.derived) setDerivedValues(data.derived);
-      }
     } catch (err) {
-      console.warn('[SimConfig] Failed to push config:', err);
+      console.warn('[SimConfig] Push failed:', err);
     }
   }, []);
 
-  // ---------------------------------------------------------------
-  // Dispatch — update a single config key
-  // ---------------------------------------------------------------
-  const dispatch = useCallback(
-    (key, value) => {
-      setConfig((prev) => {
-        const next = { ...prev, [key]: value };
-        // Debounce backend push
-        clearTimeout(debounceTimer.current);
-        debounceTimer.current = setTimeout(() => pushToBackend(next), 300);
-        return next;
-      });
-      // Any manual slider move clears the active scenario highlight
-      setActiveScenario(null);
-    },
-    [pushToBackend]
-  );
-
-  // ---------------------------------------------------------------
-  // Bulk set — apply all values at once (for scenario presets)
-  // ---------------------------------------------------------------
-  const setAll = useCallback(
-    (values, scenarioName = null) => {
-      const next = { ...DEFAULT_CONFIG, ...values };
-      setConfig(next);
-      setActiveScenario(scenarioName);
-      // Push immediately for scenarios (no debounce)
+  const dispatch = useCallback((key, value) => {
+    setConfig((prev) => {
+      const next = { ...prev, [key]: value };
       clearTimeout(debounceTimer.current);
-      pushToBackend(next);
-    },
-    [pushToBackend]
-  );
+      debounceTimer.current = setTimeout(() => pushToBackend(next, targetBusId), 300);
+      return next;
+    });
+    setActiveScenario(null);
+  }, [pushToBackend, targetBusId]);
 
-  // ---------------------------------------------------------------
-  // Cleanup debounce timer on unmount
-  // ---------------------------------------------------------------
-  useEffect(() => {
-    return () => clearTimeout(debounceTimer.current);
-  }, []);
+  const setAll = useCallback((values, scenarioName = null) => {
+    const next = { ...DEFAULT_CONFIG, ...values };
+    setConfig(next);
+    setActiveScenario(scenarioName);
+    clearTimeout(debounceTimer.current);
+    pushToBackend(next, targetBusId);
+  }, [pushToBackend, targetBusId]);
+
+  useEffect(() => () => clearTimeout(debounceTimer.current), []);
 
   return {
     config,
@@ -134,5 +91,7 @@ export default function useSimConfig() {
     setAll,
     activeScenario,
     setActiveScenario,
+    targetBusId,
+    setTargetBusId,
   };
 }

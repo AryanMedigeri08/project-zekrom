@@ -1,80 +1,87 @@
 /**
- * NetworkPanel — Signal strength waveform (light mode, no emojis).
+ * NetworkPanel — Per-bus signal waveform selector (light mode).
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  ReferenceLine,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
-// SVG Icons
 const SignalIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79" />
   </svg>
 );
 
-export default function NetworkPanel({ signalHistory, signalStrength }) {
+export default function NetworkPanel({ buses, signalHistory }) {
+  const busIds = useMemo(() => Object.keys(buses || {}).sort(), [buses]);
+  const [selectedBus, setSelectedBus] = useState(null);
+
+  // Auto-select first bus
+  const activeBusId = selectedBus && busIds.includes(selectedBus) ? selectedBus : busIds[0];
+  const activeBus = buses?.[activeBusId];
+  const signalStrength = activeBus?.signal_strength ?? 0;
   const isOffline = signalStrength < 10;
   const isDegraded = signalStrength < 40;
-
   const strokeColor = isOffline ? '#dc2626' : isDegraded ? '#ea580c' : '#0d9488';
 
   const chartData = useMemo(() => {
-    const data = [...(signalHistory || [])];
-    while (data.length < 30) {
-      data.unshift({ time: '', value: 0, timestamp: 0 });
-    }
+    const data = [...(signalHistory?.[activeBusId] || [])];
+    while (data.length < 30) data.unshift({ time: '', value: 0 });
     return data.slice(-30);
-  }, [signalHistory]);
+  }, [signalHistory, activeBusId]);
 
-  const qualityLabel = isOffline
-    ? 'OFFLINE' : signalStrength >= 70
-    ? 'EXCELLENT' : signalStrength >= 40
-    ? 'GOOD' : 'POOR';
-
-  const qualityColor = isOffline
-    ? 'text-red-600' : signalStrength >= 70
-    ? 'text-teal-600' : 'text-orange-600';
+  const qualityLabel = isOffline ? 'OFFLINE' : signalStrength >= 70 ? 'EXCELLENT' : signalStrength >= 40 ? 'GOOD' : 'POOR';
+  const qualityColor = isOffline ? 'text-red-600' : signalStrength >= 70 ? 'text-teal-600' : 'text-orange-600';
 
   return (
-    <div className="card-panel p-4 flex flex-col gap-2.5 h-full">
+    <div className="card-panel p-4 flex flex-col gap-2 h-full">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={isOffline ? 'text-red-500' : isDegraded ? 'text-orange-500' : 'text-teal-600'}>
             <SignalIcon />
           </span>
-          <h3 className="text-xs font-semibold text-gray-700 tracking-wide">Network Health</h3>
+          <h3 className="text-xs font-semibold text-gray-700">Network Health</h3>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold tracking-widest ${qualityColor}`}>
-            {qualityLabel}
-          </span>
+          <span className={`text-[10px] font-bold tracking-widest ${qualityColor}`}>{qualityLabel}</span>
           <div className={`signal-dot ${isOffline ? 'offline' : isDegraded ? 'degraded' : 'online'}`} />
         </div>
       </div>
 
+      {/* Bus selector tabs */}
+      <div className="flex gap-1">
+        {busIds.map((bid) => {
+          const bus = buses[bid];
+          const sig = bus?.signal_strength ?? 0;
+          const isActive = bid === activeBusId;
+          const dotColor = sig >= 70 ? 'bg-green-400' : sig >= 40 ? 'bg-yellow-400' : 'bg-red-400';
+          return (
+            <button key={bid} onClick={() => setSelectedBus(bid)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-semibold transition-colors ${
+                isActive ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-gray-50 text-gray-400 border border-gray-100 hover:text-gray-600'
+              }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+              {bus?.label || bid}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Signal value */}
       <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-extrabold tabular-nums" style={{ color: strokeColor }}>
-          {signalStrength}
-        </span>
-        <span className="text-[10px] text-gray-400 font-medium">% signal</span>
+        <span className="text-2xl font-extrabold tabular-nums" style={{ color: strokeColor }}>{signalStrength}</span>
+        <span className="text-[10px] text-gray-400 font-medium">%</span>
       </div>
 
       {/* Chart */}
-      <div className="relative flex-1 min-h-[100px]">
+      <div className="relative flex-1 min-h-[90px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
             <defs>
-              <linearGradient id="signalGradient" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={`sg-${activeBusId}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={strokeColor} stopOpacity={0.2} />
                 <stop offset="95%" stopColor={strokeColor} stopOpacity={0.02} />
               </linearGradient>
@@ -86,26 +93,19 @@ export default function NetworkPanel({ signalHistory, signalStrength }) {
             <ReferenceLine y={40} stroke="rgba(234,88,12,0.15)" strokeDasharray="4 4" />
             <ReferenceLine y={10} stroke="rgba(220,38,38,0.2)" strokeDasharray="4 4" />
             <Area type="monotone" dataKey="value" stroke={strokeColor} strokeWidth={2}
-              fill="url(#signalGradient)" isAnimationActive={false} dot={false} />
+              fill={`url(#sg-${activeBusId})`} isAnimationActive={false} dot={false} />
           </AreaChart>
         </ResponsiveContainer>
-
-        {/* SIGNAL LOST overlay */}
         {isOffline && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg">
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-red-600 font-extrabold text-sm tracking-[0.2em] animate-pulse">SIGNAL LOST</span>
-              <span className="text-gray-400 text-[10px]">Pings are being buffered</span>
-            </div>
+            <span className="text-red-600 font-extrabold text-sm tracking-[0.2em] animate-pulse">SIGNAL LOST</span>
           </div>
         )}
       </div>
 
-      {/* Tier legend */}
       <div className="flex justify-between text-[9px] font-mono text-gray-400 px-0.5">
         <span className="text-red-400">0-10% Dead</span>
         <span className="text-orange-400">10-40% Poor</span>
-        <span className="text-orange-400">40-70% Good</span>
         <span className="text-teal-500">70-100% Excellent</span>
       </div>
     </div>

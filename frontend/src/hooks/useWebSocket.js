@@ -1,108 +1,35 @@
 /**
- * useWebSocket — Auto-reconnecting WebSocket hook for the transport tracker.
+ * useWebSocket — Multi-bus WebSocket hook.
  *
- * Connects to the backend WebSocket at ws://localhost:8000/ws/client.
- * Automatically reconnects with exponential backoff on disconnect.
- * Provides parsed message stream and connection status.
+ * State:
+ *   routes: { route_purple: { geometry, stops, ... }, ... }
+ *   buses:  { bus_01: { lat, lng, signal, traffic, isGhost, label, ... }, ... }
+ *   signalHistory: per-bus signal history for waveform
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const WS_URL = 'ws://localhost:8000/ws/client';
-const INITIAL_RETRY_MS = 1000;
-const MAX_RETRY_MS = 10000;
+const MAX_SIGNAL_HISTORY = 40;
+const RECONNECT_DELAY_MS = 2000;
+const MAX_RECONNECT_DELAY_MS = 15000;
 
 export default function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState(null);
-  const [route, setRoute] = useState([]);
-  const [busPosition, setBusPosition] = useState(null);
-  const [signalStrength, setSignalStrength] = useState(85);
-  const [bufferSize, setBufferSize] = useState(0);
-  const [bufferedPings, setBufferedPings] = useState([]);
-  const [lastPingTime, setLastPingTime] = useState(null);
-  const [signalHistory, setSignalHistory] = useState([]);
+  const [routes, setRoutes] = useState({});
+  const [buses, setBuses] = useState({});
+  const [signalHistory, setSignalHistory] = useState({});   // { bus_id: [{time, value}] }
+  const [bufferedPings, setBufferedPings] = useState({});    // { bus_id: [...pings] }
 
   const wsRef = useRef(null);
-  const retryDelayRef = useRef(INITIAL_RETRY_MS);
-  const retryTimerRef = useRef(null);
-  const mountedRef = useRef(true);
+  const reconnectDelay = useRef(RECONNECT_DELAY_MS);
+  const reconnectTimer = useRef(null);
+  const tickCounter = useRef(0);
 
-  // ---------------------------------------------------------------
-  // Message Handler
-  // ---------------------------------------------------------------
-  const handleMessage = useCallback((event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      setLastMessage(msg);
-
-      switch (msg.type) {
-        case 'init':
-          // Initial payload: route definition + current bus state
-          if (msg.route) setRoute(msg.route);
-          if (msg.bus) {
-            setBusPosition(msg.bus);
-            setLastPingTime(new Date().toISOString());
-          }
-          if (msg.signal_strength != null) setSignalStrength(msg.signal_strength);
-          if (msg.buffer_size != null) setBufferSize(msg.buffer_size);
-          break;
-
-        case 'position_update':
-          // Normal GPS ping
-          if (msg.data) {
-            setBusPosition(msg.data);
-            setLastPingTime(new Date().toISOString());
-          }
-          if (msg.buffer_size != null) setBufferSize(msg.buffer_size);
-          break;
-
-        case 'buffer_flush':
-          // Buffered pings arriving after signal recovery
-          if (msg.pings && msg.pings.length > 0) {
-            setBufferedPings(msg.pings);
-            // Set position to the latest flushed ping
-            const latest = msg.pings[msg.pings.length - 1];
-            setBusPosition(latest);
-            setLastPingTime(new Date().toISOString());
-          }
-          if (msg.buffer_size != null) setBufferSize(msg.buffer_size);
-          break;
-
-        case 'signal_update':
-          if (msg.signal_strength != null) setSignalStrength(msg.signal_strength);
-          if (msg.buffer_size != null) setBufferSize(msg.buffer_size);
-          break;
-
-        case 'heartbeat':
-          // Periodic signal-strength heartbeat for the waveform panel
-          if (msg.signal_strength != null) setSignalStrength(msg.signal_strength);
-          if (msg.buffer_size != null) setBufferSize(msg.buffer_size);
-          // Append to signal history (sliding window of 30)
-          setSignalHistory((prev) => {
-            const next = [
-              ...prev,
-              {
-                time: new Date().toLocaleTimeString(),
-                value: msg.signal_strength,
-                timestamp: Date.now(),
-              },
-            ];
-            return next.slice(-30);
-          });
-          break;
-
-        default:
-          break;
-      }
-    } catch (err) {
-      console.warn('[WS] Failed to parse message:', err);
-    }
+  const clearBufferedPings = useCallback((busId) => {
+    setBufferedPings((prev) => ({ ...prev, [busId]: [] }));
   }, []);
 
-  // ---------------------------------------------------------------
-  // Connection Management
-  // ---------------------------------------------------------------
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -110,65 +37,182 @@ export default function useWebSocket() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[WS] Connected');
       setIsConnected(true);
-      retryDelayRef.current = INITIAL_RETRY_MS; // reset backoff
+      reconnectDelay.current = RECONNECT_DELAY_MS;
     };
 
-    ws.onmessage = handleMessage;
-
-    ws.onclose = (e) => {
-      console.log('[WS] Disconnected', e.code, e.reason);
+    ws.onclose = () => {
       setIsConnected(false);
-      scheduleReconnect();
+      wsRef.current = null;
+      reconnectTimer.current = setTimeout(() => {
+        reconnectDelay.current = Math.min(reconnectDelay.current * 1.5, MAX_RECONNECT_DELAY_MS);
+        connect();
+      }, reconnectDelay.current);
     };
 
-    ws.onerror = (err) => {
-      console.warn('[WS] Error:', err);
-      ws.close();
-    };
-  }, [handleMessage]);
+    ws.onerror = () => ws.close();
 
-  const scheduleReconnect = useCallback(() => {
-    if (!mountedRef.current) return;
-    const delay = retryDelayRef.current;
-    console.log(`[WS] Reconnecting in ${delay}ms...`);
-    retryTimerRef.current = setTimeout(() => {
-      retryDelayRef.current = Math.min(delay * 1.5, MAX_RETRY_MS);
-      connect();
-    }, delay);
-  }, [connect]);
-
-  // ---------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------
-  useEffect(() => {
-    mountedRef.current = true;
-    connect();
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(retryTimerRef.current);
-      if (wsRef.current) {
-        wsRef.current.onclose = null; // prevent reconnect on unmount
-        wsRef.current.close();
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleMessage(msg);
+      } catch (e) {
+        console.warn('[WS] Parse error:', e);
       }
     };
-  }, [connect]);
+  }, []);
 
-  // Provide a way to clear buffered pings after consumption
-  const clearBufferedPings = useCallback(() => setBufferedPings([]), []);
+  const handleMessage = useCallback((msg) => {
+    switch (msg.type) {
+      case 'init': {
+        // Set routes (with geometry)
+        if (msg.routes) setRoutes(msg.routes);
+
+        // Set initial bus states
+        if (msg.buses) {
+          const busMap = {};
+          for (const [busId, bdata] of Object.entries(msg.buses)) {
+            const ping = bdata.last_ping;
+            busMap[busId] = {
+              id: busId,
+              route_id: bdata.route_id,
+              label: bdata.label,
+              lat: ping?.lat ?? 0,
+              lng: ping?.lng ?? 0,
+              speed_kmh: ping?.speed_kmh ?? 0,
+              heading: ping?.heading_degrees ?? 0,
+              signal_strength: bdata.signal_strength ?? 85,
+              traffic_level: bdata.traffic_level ?? 'medium',
+              is_ghost: bdata.is_ghost ?? false,
+              ping_type: ping?.ping_type ?? 'real',
+              next_stop: ping?.next_stop ?? '',
+              stop_index: ping?.stop_index ?? 0,
+              route_progress: ping?.route_progress ?? 0,
+              geometry_index: ping?.geometry_index ?? 0,
+              buffer_size: bdata.buffer_size ?? 0,
+              timestamp: ping?.timestamp ?? '',
+              trail: [],  // last 30 positions
+            };
+          }
+          setBuses(busMap);
+        }
+        break;
+      }
+
+      case 'position_update': {
+        const busId = msg.bus_id;
+        const data = msg.data;
+        if (!busId || !data) break;
+
+        setBuses((prev) => {
+          const old = prev[busId] || {};
+          const trail = [...(old.trail || [])];
+          if (data.lat && data.lng) {
+            trail.push({ lat: data.lat, lng: data.lng });
+            if (trail.length > 30) trail.shift();
+          }
+
+          return {
+            ...prev,
+            [busId]: {
+              ...old,
+              id: busId,
+              lat: data.lat,
+              lng: data.lng,
+              speed_kmh: data.speed_kmh,
+              heading: data.heading_degrees,
+              signal_strength: data.signal_strength,
+              traffic_level: data.traffic_level,
+              is_ghost: data.ping_type === 'ghost',
+              ping_type: data.ping_type,
+              next_stop: data.next_stop,
+              stop_index: data.stop_index,
+              route_progress: data.route_progress,
+              geometry_index: data.geometry_index,
+              buffer_size: msg.buffer_size ?? 0,
+              timestamp: data.timestamp,
+              label: data.label || old.label,
+              route_id: data.route_id || old.route_id,
+              trail,
+            },
+          };
+        });
+
+        // Update signal history
+        tickCounter.current += 1;
+        setSignalHistory((prev) => {
+          const hist = [...(prev[busId] || [])];
+          hist.push({
+            time: tickCounter.current,
+            value: data.signal_strength,
+            timestamp: Date.now(),
+          });
+          if (hist.length > MAX_SIGNAL_HISTORY) hist.shift();
+          return { ...prev, [busId]: hist };
+        });
+        break;
+      }
+
+      case 'buffer_flush': {
+        const busId = msg.bus_id;
+        if (!busId) break;
+        setBufferedPings((prev) => ({
+          ...prev,
+          [busId]: msg.pings || [],
+        }));
+
+        // Update bus ghost status
+        setBuses((prev) => ({
+          ...prev,
+          [busId]: {
+            ...(prev[busId] || {}),
+            is_ghost: false,
+            buffer_size: 0,
+          },
+        }));
+        break;
+      }
+
+      case 'heartbeat': {
+        if (msg.buses) {
+          setBuses((prev) => {
+            const next = { ...prev };
+            for (const [busId, hb] of Object.entries(msg.buses)) {
+              if (next[busId]) {
+                next[busId] = {
+                  ...next[busId],
+                  signal_strength: hb.signal_strength,
+                  buffer_size: hb.buffer_size,
+                  is_ghost: hb.is_ghost,
+                  traffic_level: hb.traffic_level,
+                };
+              }
+            }
+            return next;
+          });
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
+  }, []);
+
+  useEffect(() => {
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer.current);
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [connect]);
 
   return {
     isConnected,
-    lastMessage,
-    route,
-    busPosition,
-    signalStrength,
-    bufferSize,
+    routes,
+    buses,
+    signalHistory,
     bufferedPings,
     clearBufferedPings,
-    lastPingTime,
-    signalHistory,
   };
 }
