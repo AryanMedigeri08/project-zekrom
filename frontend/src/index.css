@@ -1,9 +1,11 @@
+@import 'mapbox-gl/dist/mapbox-gl.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ----------------------------------------------------------------
-   Global Styles — Light Mode, Multi-Bus
+   Global Styles — Light Mode, Multi-Bus, Hybrid 2D/3D
    ---------------------------------------------------------------- */
 
 :root {
@@ -23,14 +25,14 @@
 
 .leaflet-container:focus { outline: none; }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ----------------------------------------------------------------
-   Bus Marker — Color-coded by signal strength
+   2D Bus Marker — Signal strength color coded
    ---------------------------------------------------------------- */
 .bus-marker-dot {
   width: 32px;
@@ -46,6 +48,13 @@
     0 0 0 2px rgba(0,0,0,0.08),
     0 2px 8px rgba(0,0,0,0.15);
   z-index: 10;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.bus-marker-dot:hover {
+  transform: scale(1.15);
+  filter: brightness(1.15);
 }
 
 .bus-marker-dot .bus-label {
@@ -57,7 +66,6 @@
   line-height: 1;
 }
 
-/* Pulse ring animation */
 .bus-marker-dot .pulse-ring {
   position: absolute;
   top: 50%;
@@ -73,18 +81,12 @@
 }
 
 @keyframes marker-pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(2.2);
-    opacity: 0;
-  }
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
 }
 
 /* ----------------------------------------------------------------
-   Ghost Bus Marker — Translucent, dashed border
+   2D Ghost Bus Marker
    ---------------------------------------------------------------- */
 .bus-marker-ghost {
   width: 32px;
@@ -100,6 +102,7 @@
   opacity: 0.6;
   animation: ghost-fade 2.5s ease-in-out infinite;
   z-index: 5;
+  cursor: pointer;
 }
 
 .bus-marker-ghost .bus-label {
@@ -125,6 +128,168 @@
 @keyframes ghost-fade {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.75; }
+}
+
+/* ----------------------------------------------------------------
+   3D Bus Marker (Mapbox)
+   ---------------------------------------------------------------- */
+.bus-marker-3d {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+}
+
+.marker-body-3d {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 3px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  transition: border-color 0.5s ease, opacity 0.3s ease;
+}
+
+.marker-icon {
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-label {
+  font-size: 8px;
+  color: #e2e8f0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-top: 1px;
+}
+
+.marker-shadow-3d {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 8px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 50%;
+  filter: blur(3px);
+}
+
+.pulse-3d {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  z-index: 1;
+  animation: pulse3d 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse3d {
+  0%   { transform: translate(-50%,-50%) scale(0.8); opacity: 0.8; }
+  100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; }
+}
+
+/* Ghost mode in 3D */
+.ghost-mode-3d .marker-body-3d {
+  opacity: 0.4;
+  border-style: dashed;
+  border-color: #ffffff !important;
+}
+
+.ghost-mode-3d .pulse-3d {
+  background: rgba(255,255,255,0.1) !important;
+  border-color: rgba(255,255,255,0.3) !important;
+}
+
+.ghost-mode-3d::after {
+  content: 'ESTIMATED';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 800;
+  color: #f97316;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+/* Mapbox container */
+.mapboxgl-map { width: 100%; height: 100%; }
+
+/* ----------------------------------------------------------------
+   Transition Overlay (2D ↔ 3D)
+   ---------------------------------------------------------------- */
+.transition-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0f172a;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: overlayFade 450ms ease-in-out forwards;
+}
+
+@keyframes overlayFade {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.transition-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.transition-title {
+  color: #e2e8f0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.transition-sub {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.transition-bar {
+  width: 200px;
+  height: 3px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.transition-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  animation: barFill 450ms ease-out forwards;
+}
+
+@keyframes barFill {
+  from { width: 0%; }
+  to   { width: 100%; }
 }
 
 /* ----------------------------------------------------------------
@@ -288,4 +453,11 @@ input[type="range"]::-moz-range-thumb {
   height: 3px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+/* ----------------------------------------------------------------
+   Leaflet marker hover effect (3D hint)
+   ---------------------------------------------------------------- */
+.leaflet-marker-icon {
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
