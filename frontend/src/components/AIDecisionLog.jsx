@@ -32,7 +32,7 @@ function isRecent(timestamp) {
   return (now - entryDate) < 10000;
 }
 
-export default function AIDecisionLog({ busFilter }) {
+export default function AIDecisionLog({ busFilter, mode = 'live' }) {
   const { addNotification } = useNotifications();
   const [entries, setEntries] = useState([]);
   const [expandedIdx, setExpandedIdx] = useState(null);
@@ -44,15 +44,23 @@ export default function AIDecisionLog({ busFilter }) {
       const resp = await fetch(`${API_BASE}/api/system-log`);
       if (!resp.ok) return;
       const data = await resp.json();
-      const withExp = data.filter(e => e.explanation);
-
+      
+      // Filter logs by current mode (live vs simulated)
+      const filteredData = data.filter(e => {
+        if (mode === 'live') return !e.is_simulated;
+        if (mode === 'simulation') return e.is_simulated;
+        return true;
+      });
+      
+      const withExp = filteredData.filter(e => e.explanation);
       const reversed = [...withExp].reverse();
 
       reversed.forEach(e => {
         const key = `${e.timestamp}-${e.explanation?.decision}-${e.explanation?.bus_id}`;
         if (!seenIdsRef.current.has(key)) {
           seenIdsRef.current.add(key);
-          if (seenIdsRef.current.size > 5) {
+          // Only pop notifications if we are in live mode, preventing simulated spam
+          if (seenIdsRef.current.size > 5 && mode === 'live') {
             addNotification({
               type: 'ai_decision',
               title: e.explanation?.decision || e.message,

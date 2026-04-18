@@ -140,7 +140,7 @@ export default function NotificationCenter() {
               borderBottom: '1px solid var(--color-border)',
               background: n.read
                 ? 'transparent'
-                : (isDark ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)'),
+                : 'rgba(99,102,241,0.04)',
               cursor: 'pointer',
               transition: 'background 0.15s',
             }}>

@@ -1,31 +1,50 @@
 /**
- * SimulationDashboard.jsx — Professional Clean Laboratory
+ * SimulationDashboard.jsx — Phase 8: Simulation Lab with Layer Activity Monitor.
+ *
+ * Layout:
+ * ┌──────────────────────────────────────────────┐
+ * │  COMPACT CONTROL BAR (full width, ~auto h)   │
+ * ├──────────────────────┬───────────────────────┤
+ * │  SIMULATION MAP 70%  │  LAYER ACTIVITY       │
+ * │                      │  MONITOR 30%          │
+ * ├──────────────────────┴───────────────────────┤
+ * │  ETA Timeline (full width)                   │
+ * └──────────────────────────────────────────────┘
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import MapView from './MapView';
 import ETATimeline from './ETATimeline';
-import AIDecisionLog from './AIDecisionLog';
+import LayerActivityMonitor from './LayerActivityMonitor';
 
 const API_BASE = 'http://localhost:8000';
 
 const SCENARIOS = [
-  { id: 'rush_hour', title: 'RUSH HOUR', values: { signal_strength: 90, packet_loss: 5, latency_ms: 150, traffic_level: 2, weather: 0, buffer_size_limit: 50 } },
-  { id: 'dead_zone', title: 'DEAD ZONE', values: { signal_strength: 0, packet_loss: 50, latency_ms: 2000, traffic_level: 0, weather: 0, buffer_size_limit: 50 } },
-  { id: 'recovery', title: 'RECOVERY', values: null },
-  { id: 'storm', title: 'STORM', values: { signal_strength: 35, packet_loss: 25, latency_ms: 800, traffic_level: 2, weather: 2, buffer_size_limit: 50 } },
+  { id: 'rush_hour', title: 'RUSH HOUR', icon: '🚦', values: { signal_strength: 90, packet_loss: 5, latency_ms: 150, traffic_level: 2, weather: 0, buffer_size_limit: 50 } },
+  { id: 'dead_zone', title: 'DEAD ZONE', icon: '📡', values: { signal_strength: 0, packet_loss: 50, latency_ms: 2000, traffic_level: 0, weather: 0, buffer_size_limit: 50 } },
+  { id: 'recovery', title: 'RECOVERY', icon: '🔄', values: null },
+  { id: 'storm', title: 'STORM', icon: '⛈', values: { signal_strength: 35, packet_loss: 25, latency_ms: 800, traffic_level: 2, weather: 2, buffer_size_limit: 50 } },
 ];
 
 const DEAD_VALUES = SCENARIOS[1].values;
 const RECOVERY_VALUES = { signal_strength: 85, packet_loss: 5, latency_ms: 100, traffic_level: 1, weather: 0, buffer_size_limit: 50 };
 
 const BUS_OPTIONS = [
-  { id: null, label: 'ALL BUSES' },
+  { id: null, label: 'ALL' },
   { id: 'bus_01', label: 'MIT-01' },
   { id: 'bus_02', label: 'HIN-02' },
   { id: 'bus_03', label: 'HAD-03' },
   { id: 'bus_04', label: 'KAT-04' },
   { id: 'bus_05', label: 'PUN-05' },
+];
+
+const SLIDER_DEFS = [
+  { key: 'signal_strength', label: 'Signal', min: 0, max: 100, step: 1, unit: '%', getColor: v => v >= 70 ? '#22c55e' : v >= 40 ? '#f59e0b' : '#ef4444' },
+  { key: 'packet_loss', label: 'Loss', min: 0, max: 50, step: 1, unit: '%', getColor: v => v > 25 ? '#ef4444' : '#6366f1' },
+  { key: 'latency_ms', label: 'Latency', min: 0, max: 2000, step: 50, unit: 'ms', getColor: v => v > 1000 ? '#ef4444' : '#6366f1' },
+  { key: 'traffic_level', label: 'Traffic', min: 0, max: 2, step: 1, unit: '', getColor: v => v === 0 ? '#22c55e' : v === 1 ? '#f59e0b' : '#ef4444', format: v => ['LOW', 'MED', 'HIGH'][v] },
+  { key: 'weather', label: 'Weather', min: 0, max: 2, step: 1, unit: '', getColor: () => '#6366f1', format: v => ['CLR', 'CLD', 'STM'][v] },
+  { key: 'buffer_size_limit', label: 'Buffer', min: 10, max: 200, step: 5, unit: '', getColor: () => '#6366f1' },
 ];
 
 export default function SimulationDashboard({ simConfig, routes, buses, deadZones, mitaoe }) {
@@ -48,164 +67,159 @@ export default function SimulationDashboard({ simConfig, routes, buses, deadZone
   const handleScenario = (s) => s.id === 'recovery' ? runRecovery() : setAll(s.values, s.id);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* Row 0: Bus Selector + Scenarios */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', letterSpacing: '1px' }}>TARGET:</span>
-          {BUS_OPTIONS.map(opt => (
-            <button key={opt.label} onClick={() => setTargetBusId(opt.id)} style={{
-              padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-              border: `1px solid ${targetBusId === opt.id ? 'var(--signal-cyan)' : 'var(--color-border)'}`,
-              background: targetBusId === opt.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255, 255, 255, 0.5)',
-              color: targetBusId === opt.id ? 'var(--signal-cyan)' : 'var(--color-text-secondary)',
-              cursor: 'pointer', transition: 'all 0.2s',
-              boxShadow: targetBusId === opt.id ? 'none' : '0 1px 2px rgba(0,0,0,0.02)'
-            }}>{opt.label}</button>
-          ))}
+      {/* ══════════ COMPACT CONTROL BAR (sticky top) ══════════ */}
+      <div className="glass-card compact-control-bar" style={{
+        padding: '10px 16px', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: '8px',
+        zIndex: 10,
+      }}>
+        {/* Row 1: Bus Selector + Sliders */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Bus selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>TARGET</span>
+            {BUS_OPTIONS.map(opt => (
+              <button key={opt.label} onClick={() => setTargetBusId(opt.id)} style={{
+                padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700,
+                border: `1px solid ${targetBusId === opt.id ? 'var(--signal-cyan)' : 'var(--color-border)'}`,
+                background: targetBusId === opt.id ? 'rgba(99,102,241,0.1)' : 'transparent',
+                color: targetBusId === opt.id ? 'var(--signal-cyan)' : 'var(--color-text-muted)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+
+          <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', flexShrink: 0 }} />
+
+          {/* Inline sliders */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, flexWrap: 'wrap' }}>
+            {SLIDER_DEFS.map(sl => {
+              const val = config[sl.key] ?? sl.min;
+              const color = sl.getColor(val);
+              const display = sl.format ? sl.format(val) : `${val}${sl.unit}`;
+              return (
+                <div key={sl.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '120px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', width: '42px' }}>{sl.label}</span>
+                  <input
+                    type="range" min={sl.min} max={sl.max} step={sl.step}
+                    value={val}
+                    onChange={e => dispatch(sl.key, Number(e.target.value))}
+                    style={{ width: '70px', flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: '11px', fontWeight: 700, color, minWidth: '32px', fontVariantNumeric: 'tabular-nums' }}>{display}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {SCENARIOS.map(s => (
-            <button key={s.id} onClick={() => handleScenario(s)} style={{
-              padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-              border: `1px solid ${activeScenario === s.id ? (s.id === 'recovery' ? 'var(--signal-green)' : 'var(--signal-amber)') : 'var(--color-border)'}`,
-              background: activeScenario === s.id ? (s.id === 'recovery' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)') : 'rgba(255, 255, 255, 0.5)',
-              color: activeScenario === s.id ? (s.id === 'recovery' ? 'var(--signal-green)' : 'var(--signal-amber)') : 'var(--color-text-secondary)',
-              cursor: 'pointer', transition: 'all 0.2s',
-              boxShadow: activeScenario === s.id ? 'none' : '0 1px 2px rgba(0,0,0,0.02)'
+
+        {/* Row 2: Scenarios + Derived Metrics */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.5px' }}>SCENARIO</span>
+            {SCENARIOS.map(s => (
+              <button key={s.id} onClick={() => handleScenario(s)} style={{
+                padding: '4px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 700,
+                border: `1px solid ${activeScenario === s.id ? (s.id === 'recovery' ? '#22c55e' : '#f59e0b') : 'var(--color-border)'}`,
+                background: activeScenario === s.id ? (s.id === 'recovery' ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)') : 'transparent',
+                color: activeScenario === s.id ? (s.id === 'recovery' ? '#22c55e' : '#f59e0b') : 'var(--color-text-muted)',
+                cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px',
+              }}>
+                <span style={{ fontSize: '11px' }}>{s.icon}</span>
+                {s.title}
+                {s.id === 'recovery' && recoveryCountdown !== null && (
+                  <span style={{ color: '#f59e0b', animation: 'signal-blink 0.8s infinite' }}>{recoveryCountdown}s</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Compact derived metrics */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>PING</span>
+              <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>{derived?.ping_interval_ms ? `${derived.ping_interval_ms}ms` : 'BUF'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>CONF</span>
+              <span style={{
+                fontWeight: 700,
+                color: derived?.confidence_width === 'narrow' ? '#22c55e' : derived?.confidence_width === 'medium' ? '#f59e0b' : '#ef4444',
+              }}>{(derived?.confidence_width || 'narrow').toUpperCase()}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>BUF</span>
+              <span style={{
+                fontWeight: 700,
+                color: derived?.buffer_mode === 'active' ? '#f59e0b' : '#22c55e',
+              }}>{derived?.buffer_mode === 'active' ? 'ACTIVE' : 'STBY'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════ SCROLLABLE CONTENT AREA ══════════ */}
+      <div style={{
+        flex: 1, overflowY: 'auto', overflowX: 'hidden',
+        display: 'flex', flexDirection: 'column', gap: '12px',
+        padding: '12px 0 24px 0',
+      }}>
+
+        {/* ── Row 1: Map (70%) + Layer Monitor (30%) ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '70fr 30fr',
+          gap: '12px',
+          minHeight: '500px',
+        }}>
+          {/* Simulation Map */}
+          <div className="glass-card" style={{ position: 'relative', overflow: 'hidden', padding: '4px', minHeight: '500px' }}>
+            {/* Parameter readout overlay */}
+            <div className="glass-card" style={{
+              position: 'absolute', bottom: '12px', right: '12px', zIndex: 500,
+              padding: '10px 14px', border: '1px solid var(--color-border)',
+              background: 'var(--color-bg-card)', boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+              fontSize: '11px',
             }}>
-              {s.title}
-              {s.id === 'recovery' && recoveryCountdown !== null && (
-                <span className="font-data-display" style={{ marginLeft: '8px', color: 'var(--signal-amber)', animation: 'signal-blink 0.8s infinite' }}>{recoveryCountdown}s</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+              <div style={{ fontWeight: 700, color: 'var(--signal-cyan)', letterSpacing: '0.05em', marginBottom: '4px', fontSize: '10px' }}>ACTIVE OVERRIDES</div>
+              <div style={{ color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>Signal: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{config.signal_strength}%</span></div>
+              <div style={{ color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>Traffic: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{['LOW', 'MEDIUM', 'HIGH'][config.traffic_level]}</span></div>
+              <div style={{ color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '12px' }}>Latency: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{config.latency_ms}ms</span></div>
+            </div>
 
-      {/* Row 1: Map (70%) + Controls (30%) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '70fr 30fr', gap: '16px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-
-        {/* Simulation Map */}
-        <div className="glass-card" style={{ position: 'relative', overflow: 'hidden', padding: '4px' }}>
-          {/* Parameter readout overlay */}
-          <div className="glass-card" style={{
-            position: 'absolute', bottom: '16px', right: '16px', zIndex: 500,
-            padding: '16px', border: '1px solid var(--color-border)',
-            background: 'var(--color-bg-card)', boxShadow: '0 4px 10px rgba(0,0,0,0.05)'
-          }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--signal-cyan)', letterSpacing: '0.05em', marginBottom: '8px' }}>ACTIVE OVERRIDES</div>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '16px' }}>Signal: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{config.signal_strength}%</span></div>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '16px' }}>Traffic: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{['LOW', 'MEDIUM', 'HIGH'][config.traffic_level]}</span></div>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '16px' }}>Latency: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{config.latency_ms}ms</span></div>
-            <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', display: 'flex', justifyContent: 'space-between', gap: '16px' }}>Loss: <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{config.packet_loss}%</span></div>
+            <div style={{ width: '100%', height: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+              <MapView
+                routes={routes}
+                buses={buses}
+                deadZones={deadZones}
+                mitaoe={mitaoe}
+                mapId="sim-map"
+                compact={false}
+                showLegend={true}
+              />
+            </div>
           </div>
 
-          <div style={{ width: '100%', height: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-            <MapView
-              routes={routes}
-              buses={buses}
-              deadZones={deadZones}
-              mitaoe={mitaoe}
-              mapId="sim-map"
-              compact={false}
-              showLegend={true}
-            />
-          </div>
+          {/* Layer Activity Monitor — full height of this row */}
+          <LayerActivityMonitor
+            buses={buses}
+            simConfig={simConfig}
+            activeScenario={activeScenario}
+          />
         </div>
 
-        {/* Control Panel */}
-        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', paddingRight: '4px' }}>
-          <ControlBlock title="NETWORK TELEMETRY" icon="">
-            <SliderCtrl label="SIGNAL STRENGTH" value={config.signal_strength} min={0} max={100} unit="%" color={config.signal_strength >= 70 ? 'var(--signal-green)' : config.signal_strength >= 40 ? 'var(--signal-amber)' : 'var(--signal-red)'} onChange={v => dispatch('signal_strength', v)} />
-            <SliderCtrl label="PACKET LOSS" value={config.packet_loss} min={0} max={50} unit="%" color={config.packet_loss > 25 ? 'var(--signal-red)' : 'var(--signal-cyan)'} onChange={v => dispatch('packet_loss', v)} />
-            <SliderCtrl label="LATENCY (PING)" value={config.latency_ms} min={0} max={2000} step={50} unit="ms" color={config.latency_ms > 1000 ? 'var(--signal-red)' : 'var(--signal-cyan)'} onChange={v => dispatch('latency_ms', v)} />
-          </ControlBlock>
-
-          <ControlBlock title="ENVIRONMENT MATRIX" icon="">
-            <ToggleCtrl label="TRAFFIC DENSITY" options={['LOW', 'MED', 'HIGH']} value={config.traffic_level} colors={['var(--signal-green)', 'var(--signal-amber)', 'var(--signal-red)']} onChange={v => dispatch('traffic_level', v)} />
-            <ToggleCtrl label="WEATHER COND." options={['CLEAR', 'CLOUDY', 'STORM']} value={config.weather} colors={['var(--signal-cyan)', 'var(--signal-cyan)', 'var(--signal-amber)']} onChange={v => dispatch('weather', v)} />
-          </ControlBlock>
-
-          <ControlBlock title="SYSTEM OVERRIDES" icon="">
-            <SliderCtrl label="BUFFER CAPACITY" value={config.buffer_size_limit} min={10} max={200} step={5} unit=" pings" color="var(--signal-cyan)" onChange={v => dispatch('buffer_size_limit', v)} />
-            <ToggleCtrl label="INTERPOLATION" options={['SMOOTH', 'LITERAL']} value={config.interpolation_mode === 'smooth' ? 0 : 1} colors={['var(--signal-green)', 'var(--signal-amber)']} onChange={v => dispatch('interpolation_mode', v === 0 ? 'smooth' : 'literal')} />
-          </ControlBlock>
-
-          {/* Metrics */}
-          <div className="glass-card" style={{ padding: '20px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '16px' }}>Derived Metrics</div>
-            <MetricRow label="PING INTERVAL" value={derived?.ping_interval_ms ? `${derived.ping_interval_ms}ms` : 'BUFFERING'} />
-            <MetricRow label="PINGS / MIN" value={`${derived?.pings_per_minute ?? 0}`} />
-            <MetricRow label="AI CONFIDENCE" value={derived?.confidence_width?.toUpperCase() ?? 'NARROW'} color={derived?.confidence_width === 'narrow' ? 'var(--signal-green)' : derived?.confidence_width === 'medium' ? 'var(--signal-amber)' : 'var(--signal-red)'} />
-            <MetricRow label="BUFFER STATE" value={derived?.buffer_mode === 'active' ? 'ACTIVE' : 'STANDBY'} color={derived?.buffer_mode === 'active' ? 'var(--signal-amber)' : 'var(--signal-green)'} />
-          </div>
+        {/* ── Row 2: ETA Timeline (70% width, aligned to map) ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '70fr 30fr',
+          gap: '12px',
+        }}>
+          <ETATimeline buses={buses} routes={routes} simConfig={simConfig} />
+          <div /> {/* Empty spacer to maintain grid alignment */}
         </div>
       </div>
-
-      {/* Row 2: ETA + AI Decisions */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px', flexShrink: 0, height: '220px' }}>
-        <div style={{ padding: '0', display: 'flex' }}>
-          <div style={{ flex: 1, padding: 0 }}>
-             <ETATimeline buses={buses} routes={routes} simConfig={simConfig} />
-          </div>
-        </div>
-        <div style={{ overflow: 'hidden' }}>
-          <AIDecisionLog />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ControlBlock({ title, children }) {
-  return (
-    <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', paddingBottom: '8px', borderBottom: '1px solid var(--color-border)' }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SliderCtrl({ label, value, min, max, step = 1, unit, color, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>{label}</span>
-        <span className="font-data-display" style={{ fontSize: '14px', color: color || 'var(--color-text)' }}>{value}{unit}</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} style={{ width: '100%' }} />
-    </div>
-  );
-}
-
-function ToggleCtrl({ label, options, value, colors, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)' }}>{label}</span>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        {options.map((opt, i) => (
-          <button key={opt} onClick={() => onChange(i)} style={{
-            flex: 1, padding: '8px', fontSize: '11px', fontWeight: 600, borderRadius: '6px',
-            border: `1px solid ${value === i ? colors[i] : 'var(--color-border)'}`,
-            background: value === i ? `rgba(${value===0?'16,185,129':'245,158,11'},0.05)` : 'var(--color-bg)',
-            color: value === i ? colors[i] : 'var(--color-text-secondary)',
-            cursor: 'pointer', transition: 'all 0.2s',
-          }}>{opt}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MetricRow({ label, value, color }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', alignItems: 'center' }}>
-      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-muted)' }}>{label}</span>
-      <span style={{ fontSize: '14px', fontWeight: 600, color: color || 'var(--color-text)' }}>{value}</span>
     </div>
   );
 }

@@ -159,6 +159,18 @@ class BusConfig:
         self.buffer_size_limit = 50
         self.interpolation_mode = "smooth"
 
+    def is_overridden(self) -> bool:
+        return (
+            self.signal_strength != 85 or
+            self.packet_loss != 5 or
+            self.latency_ms != 100 or
+            self.traffic_level != 1 or
+            self.weather != 0 or
+            self.bus_speed_override != 0 or
+            self.buffer_size_limit != 50 or
+            self.interpolation_mode != "smooth"
+        )
+
 # ── Global simulation config ───────────────────────────────────
 class SimConfig:
     def __init__(self):

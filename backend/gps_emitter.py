@@ -1,9 +1,13 @@
 """
-gps_emitter.py — Phase 5: Multi-bus emitter with dead zones, ghost mode, explainability.
+gps_emitter.py — Phase 8: Multi-bus emitter with full layer telemetry.
 
 Each BusEmitter runs as an independent asyncio task.
 Ghost pings are ALWAYS emitted when signal < 10%, following road geometry.
 Dead zones override signal strength based on stop_index.
+
+Phase 8 additions:
+- Every ping now includes ~20 additional fields powering the
+  Layer Activity Monitor across all 6 resilience layers.
 """
 
 import asyncio
@@ -13,7 +17,7 @@ import math
 import json
 from typing import Optional
 from config import BUSES, ROUTES, SimConfig, TRAFFIC_LABELS
-from dead_zones import get_active_dead_zone, compute_confidence_score
+from dead_zones import get_active_dead_zone, compute_confidence_score, DEAD_ZONES, get_dead_zones_for_route
 from explainer import explainer
 from buffer import BusBufferManager
 
@@ -59,6 +63,38 @@ class BusState:
         self.in_dead_zone = False
         self.explanation = None
         self.eta_confidence = 0.8
+
+        # Phase 8: Layer telemetry tracking
+        self.ghost_confidence_history = []  # last 10 confidence values
+        self.ghost_start_time = None
+        self.ghost_distance_km = 0.0
+        self.reconciliation_deviation_m = None  # set on ghost deactivation
+        self.ghost_predicted_lat = None
+        self.ghost_predicted_lng = None
+
+        self.dead_zone_start_time = None
+        self.approaching_dead_zone = False
+        self.next_dead_zone_info = None
+        self.distance_to_dead_zone_km = None
+        self.dead_zone_progress_pct = 0.0
+        self.pre_arming_complete = False
+
+        self.prev_eta_minutes = None
+        self.last_eta_raw = None
+        self.last_eta_inputs = None
+        self.eta_delta = 0.0
+        self.eta_data_mode = "live"
+        self.eta_cone_width = "narrow"
+        self.eta_just_recalculated = False
+
+        self.ping_count_session = 0
+        self.missed_pings_session = 0
+        self.is_flushing = False
+        self.flush_progress = 0
+        self.recent_buffered_pings = []  # last 4 buffered pings for display
+
+        # Layer 1: payload history
+        self.payload_history = []  # last 20 payload sizes
 
 
 def _haversine_km(lat1, lng1, lat2, lng2) -> float:
@@ -134,6 +170,59 @@ def get_ping_interval(signal: int) -> float:
     return 2.0  # ghost mode uses 2s
 
 
+def get_payload_size(signal: int) -> int:
+    """Compute payload size in bytes based on signal strength."""
+    if signal >= 70:
+        return 400  # Full payload
+    if signal >= 40:
+        return 180  # Compressed
+    if signal >= 10:
+        return 64   # Minimal
+    return 38        # Ghost mode — bare minimum
+
+
+def compute_bandwidth_saved(signal: int) -> float:
+    """Percentage of bandwidth saved vs full payload at full signal."""
+    full = 400
+    current = get_payload_size(signal)
+    return round((1 - current / full) * 100, 1)
+
+
+def _find_next_dead_zone(route_id: str, current_stop_index: int, stops: list) -> dict | None:
+    """Find the next dead zone ahead on the route, and its distance."""
+    route_zones = get_dead_zones_for_route(route_id)
+    if not route_zones:
+        return None
+
+    best = None
+    best_distance = float("inf")
+
+    for dz in route_zones:
+        for si in dz["affected_stop_indices"]:
+            if si > current_stop_index:
+                # Compute distance from current stop to zone entry
+                if current_stop_index < len(stops) and si < len(stops):
+                    dist = _haversine_km(
+                        stops[current_stop_index]["lat"], stops[current_stop_index]["lng"],
+                        stops[si]["lat"], stops[si]["lng"]
+                    )
+                    if dist < best_distance:
+                        best_distance = dist
+                        best = {
+                            "zone_id": dz["zone_id"],
+                            "name": dz["name"],
+                            "severity": dz["severity"],
+                            "distance_km": round(dist, 2),
+                            "stop_index": si,
+                            "historical_blackout_rate": dz["historical_blackout_rate"],
+                            "avg_duration_minutes": dz["avg_duration_minutes"],
+                            "confidence_score": dz["confidence_score"],
+                            "signal_range": dz["signal_range"],
+                        }
+
+    return best
+
+
 class BusEmitter:
     """Emitter for a single bus — runs as an asyncio task."""
 
@@ -171,11 +260,41 @@ class BusEmitter:
             lo, hi = active_zone["signal_range"]
             zone_signal = random.randint(lo, hi)
             st.signal_strength = zone_signal
+
+            # Phase 8: Track dead zone timing
+            if st.dead_zone_start_time is None:
+                st.dead_zone_start_time = time.time()
+                st.pre_arming_complete = True  # was pre-armed
         else:
             st.in_dead_zone = False
             st.dead_zone = None
             st.signal_strength = cfg.signal_strength + random.randint(-5, 5)
             st.signal_strength = max(0, min(100, st.signal_strength))
+
+            # Reset dead zone timing
+            if st.dead_zone_start_time is not None:
+                st.dead_zone_start_time = None
+                st.dead_zone_progress_pct = 0.0
+
+        # ── Phase 8: Dead zone approach detection ──
+        next_dz = _find_next_dead_zone(st.route_id, st.stop_index, self.route_stops)
+        st.next_dead_zone_info = next_dz
+        if next_dz and next_dz["distance_km"] < 2.0:
+            st.approaching_dead_zone = True
+            st.distance_to_dead_zone_km = next_dz["distance_km"]
+            # Pre-arm when within 1 stop
+            if next_dz["distance_km"] < 1.0:
+                st.pre_arming_complete = True
+        else:
+            st.approaching_dead_zone = False
+            st.distance_to_dead_zone_km = next_dz["distance_km"] if next_dz else None
+            st.pre_arming_complete = False
+
+        # ── Dead zone progress ──
+        if st.in_dead_zone and active_zone and st.dead_zone_start_time:
+            elapsed_in_zone = time.time() - st.dead_zone_start_time
+            expected_duration = active_zone.get("avg_duration_minutes", 4.0) * 60
+            st.dead_zone_progress_pct = min(100, round((elapsed_in_zone / max(1, expected_duration)) * 100, 1))
 
         # ── Traffic label ──
         st.traffic_level = TRAFFIC_LABELS.get(cfg.traffic_level, "medium")
@@ -195,23 +314,56 @@ class BusEmitter:
         )
         st.eta_confidence = confidence
 
+        # ── Phase 8: ETA data mode ──
+        if st.is_ghost:
+            st.eta_data_mode = "historical"
+        elif st.signal_strength < 40:
+            st.eta_data_mode = "hybrid"
+        else:
+            st.eta_data_mode = "live"
+
+        # ── Phase 8: ETA cone width ──
+        if st.signal_strength >= 70:
+            st.eta_cone_width = "narrow"
+        elif st.signal_strength >= 40:
+            st.eta_cone_width = "medium"
+        else:
+            st.eta_cone_width = "wide"
+
+        # ── Phase 8: Payload tracking ──
+        payload_size = get_payload_size(st.signal_strength)
+        st.payload_history.append(payload_size)
+        if len(st.payload_history) > 20:
+            st.payload_history.pop(0)
+
+        st.ping_count_session += 1
+
         # ── GHOST MODE ──
         if st.signal_strength < 10:
             if not st.is_ghost:
                 # Just entered ghost mode
                 st.blackout_start_time = time.time()
+                st.ghost_start_time = time.time()
+                st.ghost_distance_km = 0.0
+                st.ghost_confidence_history = [0.90]
+                st.reconciliation_deviation_m = None
                 explanation = explainer.explain_ghost_activation(
                     self._state_dict(), active_zone
                 )
                 st.explanation = explanation
-                self.log_fn("critical", explanation["decision"], explanation)
+                self.log_fn("critical", explanation["decision"], explanation, is_simulated=cfg.is_overridden())
                 if active_zone:
                     dz_explanation = explainer.explain_dead_zone_entry(self._state_dict(), active_zone)
-                    self.log_fn("critical", dz_explanation["decision"], dz_explanation)
+                    self.log_fn("critical", dz_explanation["decision"], dz_explanation, is_simulated=cfg.is_overridden())
 
             st.is_ghost = True
             st.ping_type = "ghost"
             st.ghost_confidence = compute_ghost_confidence(st)
+
+            # Track confidence history
+            st.ghost_confidence_history.append(st.ghost_confidence)
+            if len(st.ghost_confidence_history) > 10:
+                st.ghost_confidence_history.pop(0)
 
             # Extrapolate position along road geometry
             elapsed = time.time() - st.last_real_ping_time
@@ -220,6 +372,11 @@ class BusEmitter:
             st.lat = result["lat"]
             st.lng = result["lng"]
             st.heading_degrees = result["heading"]
+            st.ghost_predicted_lat = st.lat
+            st.ghost_predicted_lng = st.lng
+
+            # Track ghost distance
+            st.ghost_distance_km = ghost_distance * 0.3
 
             # Update stop index
             st.stop_index = _compute_stop_index(st.lat, st.lng, self.route_stops)
@@ -230,8 +387,18 @@ class BusEmitter:
             self.buffer_mgr.store(self.bus_id, ping)
             st.buffer_size = self.buffer_mgr.size(self.bus_id)
 
+            # Track recent buffered pings (last 4)
+            st.recent_buffered_pings.append({
+                "timestamp": ping["timestamp"],
+                "lat": ping["lat"],
+                "lng": ping["lng"],
+            })
+            if len(st.recent_buffered_pings) > 4:
+                st.recent_buffered_pings.pop(0)
+
             await self.broadcast(ping)
             self.was_ghost = True
+            st.eta_just_recalculated = True
             await asyncio.sleep(2)  # Ghost always 2s
 
         else:
@@ -243,17 +410,35 @@ class BusEmitter:
                     flush_exp = explainer.explain_buffer_flush(
                         self._state_dict(), len(buffered), blackout_dur
                     )
-                    self.log_fn("info", flush_exp["decision"], flush_exp)
+                    self.log_fn("info", flush_exp["decision"], flush_exp, is_simulated=cfg.is_overridden())
+
+                    st.is_flushing = True
+                    st.flush_progress = 0
+
                     await self.broadcast({
                         "type": "buffer_flush",
                         "bus_id": self.bus_id,
                         "pings": buffered,
                         "explanation": flush_exp,
                     })
+
+                    st.is_flushing = False
+                    st.flush_progress = 100
+
+                # Phase 8: Compute reconciliation deviation
+                if st.ghost_predicted_lat is not None:
+                    deviation = _haversine_km(
+                        st.ghost_predicted_lat, st.ghost_predicted_lng,
+                        st.lat, st.lng
+                    ) * 1000  # convert to meters
+                    st.reconciliation_deviation_m = round(deviation, 1)
+
                 st.is_ghost = False
                 st.ping_type = "real"
                 st.ghost_confidence = 1.0
                 st.blackout_start_time = None
+                st.ghost_start_time = None
+                st.recent_buffered_pings = []
                 self.was_ghost = False
 
             # ── Normal movement along geometry ──
@@ -280,9 +465,14 @@ class BusEmitter:
             st.route_progress = st.geometry_index / max(1, len(st.route_geometry) - 1)
             st.buffer_size = self.buffer_mgr.size(self.bus_id)
             st.explanation = None
+            st.eta_just_recalculated = False
 
             if active_zone and not st.is_ghost:
                 st.explanation = explainer.explain_dead_zone_entry(self._state_dict(), active_zone)
+
+            # Clear reconciliation deviation after a few ticks
+            if st.reconciliation_deviation_m is not None and st.ping_count_session % 5 == 0:
+                st.reconciliation_deviation_m = None
 
             ping = self._build_ping()
             await self.broadcast(ping)
@@ -305,6 +495,8 @@ class BusEmitter:
 
     def _build_ping(self) -> dict:
         st = self.state
+        cfg = self.sim_config.get_bus_config(self.bus_id)
+
         zone_payload = None
         if st.dead_zone:
             zone_payload = {
@@ -316,6 +508,10 @@ class BusEmitter:
                 "confidence_score": st.dead_zone["confidence_score"],
                 "historical_blackout_rate": st.dead_zone["historical_blackout_rate"],
             }
+
+        ping_interval = get_ping_interval(st.signal_strength)
+        payload_size = get_payload_size(st.signal_strength)
+        bandwidth_saved = compute_bandwidth_saved(st.signal_strength)
 
         return {
             "bus_id": st.bus_id,
@@ -341,4 +537,47 @@ class BusEmitter:
             "dead_zone": zone_payload,
             "explanation": st.explanation,
             "timestamp": time.strftime("%H:%M:%S"),
+
+            # ── Phase 8: Layer 1 — Adaptive Payload & Frequency ──
+            "prev_signal": st.prev_signal,
+            "payload_size_bytes": payload_size,
+            "ping_interval_ms": int(ping_interval * 1000),
+            "bandwidth_saved_pct": bandwidth_saved,
+            "payload_history": list(st.payload_history),
+
+            # ── Phase 8: Layer 2 — Store & Forward Buffer ──
+            "buffer_count": st.buffer_size,
+            "buffer_max": cfg.buffer_size_limit,
+            "is_flushing": st.is_flushing,
+            "flush_progress": st.flush_progress,
+            "recent_buffered_pings": list(st.recent_buffered_pings),
+
+            # ── Phase 8: Layer 3 — Ghost Bus Extrapolation ──
+            "ghost_confidence_history": list(st.ghost_confidence_history),
+            "ghost_distance_traveled_km": round(st.ghost_distance_km, 3) if st.ghost_distance_km else 0,
+            "last_real_speed": round(st.last_speed, 1),
+            "last_real_heading": round(st.last_heading, 1),
+            "reconciliation_deviation_m": st.reconciliation_deviation_m,
+            "ghost_start_time": st.ghost_start_time,
+
+            # ── Phase 8: Layer 4 — ML ETA Prediction ──
+            "eta_data_mode": st.eta_data_mode,
+            "eta_cone_width": st.eta_cone_width,
+            "eta_just_recalculated": st.eta_just_recalculated,
+
+            # ── Phase 8: Layer 5 — Dead Zone Pre-awareness ──
+            "approaching_dead_zone": st.approaching_dead_zone,
+            "distance_to_dead_zone_km": st.distance_to_dead_zone_km,
+            "next_dead_zone": st.next_dead_zone_info,
+            "time_in_dead_zone_s": round(time.time() - st.dead_zone_start_time, 1) if st.dead_zone_start_time else 0,
+            "dead_zone_progress_pct": st.dead_zone_progress_pct,
+            "pre_arming_complete": st.pre_arming_complete,
+
+            # ── Phase 8: Layer 6 — WebSocket Resilience ──
+            "ws_latency_ms": cfg.latency_ms,
+            "ws_reconnecting": False,
+            "ws_reconnect_attempt": 0,
+            "message_queue_depth": 0,
+            "ws_uptime_s": round(time.time() - st.last_real_ping_time, 0) if st.is_ghost else 0,
+            "missed_pings_session": st.missed_pings_session,
         }

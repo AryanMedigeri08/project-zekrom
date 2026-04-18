@@ -156,6 +156,49 @@ export default function useWebSocket(notifyFn) {
             route_name: data.route_name || old.route_name,
             color: data.color || old.color,
             trail,
+
+            // Phase 8: Layer 1 — Adaptive Payload
+            prev_signal: data.prev_signal ?? old.prev_signal ?? data.signal_strength,
+            payload_size_bytes: data.payload_size_bytes ?? old.payload_size_bytes ?? 400,
+            ping_interval_ms: data.ping_interval_ms ?? old.ping_interval_ms ?? 2000,
+            bandwidth_saved_pct: data.bandwidth_saved_pct ?? old.bandwidth_saved_pct ?? 0,
+            payload_history: data.payload_history ?? old.payload_history ?? [],
+
+            // Phase 8: Layer 2 — Buffer
+            buffer_count: data.buffer_count ?? old.buffer_count ?? 0,
+            buffer_max: data.buffer_max ?? old.buffer_max ?? 50,
+            is_flushing: data.is_flushing ?? false,
+            flush_progress: data.flush_progress ?? 0,
+            recent_buffered_pings: data.recent_buffered_pings ?? old.recent_buffered_pings ?? [],
+
+            // Phase 8: Layer 3 — Ghost
+            ghost_confidence_history: data.ghost_confidence_history ?? old.ghost_confidence_history ?? [],
+            ghost_distance_traveled_km: data.ghost_distance_traveled_km ?? old.ghost_distance_traveled_km ?? 0,
+            last_real_speed: data.last_real_speed ?? old.last_real_speed ?? data.speed_kmh,
+            last_real_heading: data.last_real_heading ?? old.last_real_heading ?? 0,
+            reconciliation_deviation_m: data.reconciliation_deviation_m ?? old.reconciliation_deviation_m ?? null,
+            ghost_start_time: data.ghost_start_time ?? old.ghost_start_time ?? null,
+
+            // Phase 8: Layer 4 — ETA
+            eta_data_mode: data.eta_data_mode ?? old.eta_data_mode ?? 'live',
+            eta_cone_width: data.eta_cone_width ?? old.eta_cone_width ?? 'narrow',
+            eta_just_recalculated: data.eta_just_recalculated ?? false,
+
+            // Phase 8: Layer 5 — Dead Zone
+            approaching_dead_zone: data.approaching_dead_zone ?? false,
+            distance_to_dead_zone_km: data.distance_to_dead_zone_km ?? old.distance_to_dead_zone_km ?? null,
+            next_dead_zone: data.next_dead_zone ?? old.next_dead_zone ?? null,
+            time_in_dead_zone_s: data.time_in_dead_zone_s ?? 0,
+            dead_zone_progress_pct: data.dead_zone_progress_pct ?? 0,
+            pre_arming_complete: data.pre_arming_complete ?? false,
+
+            // Phase 8: Layer 6 — WebSocket
+            ws_latency_ms: data.ws_latency_ms ?? old.ws_latency_ms ?? 94,
+            ws_reconnecting: data.ws_reconnecting ?? false,
+            ws_reconnect_attempt: data.ws_reconnect_attempt ?? 0,
+            message_queue_depth: data.message_queue_depth ?? 0,
+            ws_uptime_s: data.ws_uptime_s ?? old.ws_uptime_s ?? 0,
+            missed_pings_session: data.missed_pings_session ?? old.missed_pings_session ?? 0,
           };
 
           // Generate notifications on state changes

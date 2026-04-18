@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from config import ROUTES, BUSES, SimConfig, TRAFFIC_LABELS, MITAOE_DESTINATION
 from route_builder import fetch_all_routes
-from gps_emitter import BusEmitter
+from gps_emitter import BusEmitter, get_ping_interval, get_payload_size, compute_bandwidth_saved
 from buffer import BusBufferManager
 from logger import system_logger
 from dead_zones import DEAD_ZONES, get_dead_zones_for_route
@@ -53,7 +53,7 @@ decision_log: List[Dict] = []
 MAX_LOG_SIZE = 100
 
 
-def log_decision(level: str, message: str, explanation: dict = None):
+def log_decision(level: str, message: str, explanation: dict = None, is_simulated: bool = False):
     """Log an AI decision with full explanation."""
     entry = {
         "timestamp": datetime.now().strftime("%H:%M:%S"),
@@ -61,6 +61,7 @@ def log_decision(level: str, message: str, explanation: dict = None):
         "message": message,
         "explanation": explanation,
         "bus_id": explanation.get("bus_id") if explanation else None,
+        "is_simulated": is_simulated,
     }
     decision_log.append(entry)
     if len(decision_log) > MAX_LOG_SIZE:
@@ -421,6 +422,94 @@ async def get_system_log(bus_id: Optional[str] = Query(None)):
     if bus_id:
         return [e for e in decision_log if e.get("bus_id") == bus_id][-20:]
     return decision_log[-20:]
+
+
+@app.get("/api/layer-status/{bus_id}")
+async def get_layer_status(bus_id: str):
+    """Return the current computed state of all 6 layers for a specific bus."""
+    emitter = bus_emitters.get(bus_id)
+    if not emitter:
+        return {"error": f"Bus {bus_id} not found"}
+
+    st = emitter.state
+    cfg = sim_config.get_bus_config(bus_id)
+    signal = st.signal_strength
+    prev_signal = st.prev_signal
+    signal_delta = abs(signal - prev_signal)
+
+    layer1_active = signal_delta > 15 or cfg.packet_loss > 20 or cfg.latency_ms > 500
+    layer2_active = signal < 10 or st.buffer_size > 0 or st.is_flushing
+    layer3_active = st.is_ghost
+    layer4_active = st.eta_just_recalculated or st.is_ghost
+    layer5_active = st.approaching_dead_zone or st.in_dead_zone
+    layer6_active = cfg.latency_ms > 200
+
+    return {
+        "bus_id": bus_id,
+        "monitored_at": datetime.now(timezone.utc).isoformat(),
+        "layers": {
+            "layer1": {
+                "active": layer1_active,
+                "data": {
+                    "ping_interval_ms": int(get_ping_interval(signal) * 1000),
+                    "payload_size_bytes": get_payload_size(signal),
+                    "bandwidth_saved_pct": compute_bandwidth_saved(signal),
+                    "prev_signal": prev_signal,
+                    "signal": signal,
+                    "payload_history": list(st.payload_history),
+                }
+            },
+            "layer2": {
+                "active": layer2_active,
+                "data": {
+                    "buffer_count": st.buffer_size,
+                    "buffer_max": cfg.buffer_size_limit,
+                    "is_flushing": st.is_flushing,
+                    "flush_progress": st.flush_progress,
+                    "recent_buffered_pings": list(st.recent_buffered_pings),
+                }
+            },
+            "layer3": {
+                "active": layer3_active,
+                "data": {
+                    "ghost_confidence": st.ghost_confidence,
+                    "ghost_confidence_history": list(st.ghost_confidence_history),
+                    "ghost_distance_km": round(st.ghost_distance_km, 3) if st.ghost_distance_km else 0,
+                    "last_real_speed": round(st.last_speed, 1),
+                    "last_real_heading": round(st.last_heading, 1),
+                    "reconciliation_deviation_m": st.reconciliation_deviation_m,
+                    "time_since_real_ping": round(time.time() - st.last_real_ping_time, 1),
+                }
+            },
+            "layer4": {
+                "active": layer4_active,
+                "data": {
+                    "eta_data_mode": st.eta_data_mode,
+                    "eta_cone_width": st.eta_cone_width,
+                    "eta_confidence": st.eta_confidence,
+                }
+            },
+            "layer5": {
+                "active": layer5_active,
+                "data": {
+                    "approaching": st.approaching_dead_zone,
+                    "in_zone": st.in_dead_zone,
+                    "next_zone": st.next_dead_zone_info,
+                    "distance_km": st.distance_to_dead_zone_km,
+                    "dead_zone_progress_pct": st.dead_zone_progress_pct,
+                    "pre_arming_complete": st.pre_arming_complete,
+                    "time_in_zone_s": round(time.time() - st.dead_zone_start_time, 1) if st.dead_zone_start_time else 0,
+                }
+            },
+            "layer6": {
+                "active": layer6_active,
+                "data": {
+                    "latency_ms": cfg.latency_ms,
+                    "missed_pings": st.missed_pings_session,
+                }
+            },
+        }
+    }
 
 
 if __name__ == "__main__":
