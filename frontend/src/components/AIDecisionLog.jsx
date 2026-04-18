@@ -1,136 +1,204 @@
 /**
- * AIDecisionLog — Rich expandable AI decision log panel.
- *
- * Color-coded by decision type, collapsible reasoning sections,
- * confidence bars, and expected duration.
+ * AIDecisionLog.jsx — Newest-first, sort toggle, NEW badge, theme-aware.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 
 const API_BASE = 'http://localhost:8000';
 
 const BORDER_COLORS = {
-  'Ghost Bus Activated': 'border-l-purple-500',
-  'Buffer Flush Executed': 'border-l-green-500',
-  'Ping Interval Adjusted': 'border-l-yellow-500',
-  'ETA Recalculated': 'border-l-blue-500',
-  'Dead Zone Entry': 'border-l-red-500',
+  'Ghost Bus Activated': '#8b5cf6',
+  'Buffer Flush Executed': '#22c55e',
+  'Ping Interval Adjusted': '#eab308',
+  'ETA Recalculated': '#3b82f6',
+  'Dead Zone Entry': '#ef4444',
 };
 
-const BG_COLORS = {
-  'Ghost Bus Activated': 'bg-purple-50/60',
-  'Buffer Flush Executed': 'bg-green-50/60',
-  'Ping Interval Adjusted': 'bg-yellow-50/60',
-  'ETA Recalculated': 'bg-blue-50/60',
-  'Dead Zone Entry': 'bg-red-50/60',
+const BG_DARK = {
+  'Ghost Bus Activated': 'rgba(139,92,246,0.08)',
+  'Buffer Flush Executed': 'rgba(34,197,94,0.08)',
+  'Ping Interval Adjusted': 'rgba(234,179,8,0.08)',
+  'ETA Recalculated': 'rgba(59,130,246,0.08)',
+  'Dead Zone Entry': 'rgba(239,68,68,0.08)',
 };
 
-const BotIcon = () => (
-  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-  </svg>
-);
+const BG_LIGHT = {
+  'Ghost Bus Activated': 'rgba(139,92,246,0.06)',
+  'Buffer Flush Executed': 'rgba(34,197,94,0.06)',
+  'Ping Interval Adjusted': 'rgba(234,179,8,0.06)',
+  'ETA Recalculated': 'rgba(59,130,246,0.06)',
+  'Dead Zone Entry': 'rgba(239,68,68,0.06)',
+};
 
-function ConfidenceBar({ value }) {
-  const pct = Math.round((value || 0) * 100);
-  const color = pct >= 75 ? '#22c55e' : pct >= 50 ? '#eab308' : '#ef4444';
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <span className="text-[9px] font-bold tabular-nums" style={{ color }}>{pct}%</span>
-    </div>
-  );
+function isRecent(timestamp) {
+  if (!timestamp) return false;
+  const now = new Date();
+  const [h, m, s] = timestamp.split(':').map(Number);
+  const entryDate = new Date();
+  entryDate.setHours(h, m, s, 0);
+  return (now - entryDate) < 10000;
 }
 
-export default function AIDecisionLog() {
+export default function AIDecisionLog({ busFilter }) {
+  const { theme } = useTheme();
+  const { addNotification } = useNotifications();
+  const isDark = theme === 'dark';
   const [entries, setEntries] = useState([]);
   const [expandedIdx, setExpandedIdx] = useState(null);
+  const [sortAsc, setSortAsc] = useState(false); // false = newest first
+  const seenIdsRef = React.useRef(new Set());
+
+  const poll = useCallback(async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/system-log`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const withExp = data.filter(e => e.explanation);
+
+      // Newest first: reverse the API data (API returns oldest first)
+      const reversed = [...withExp].reverse();
+
+      // Detect new entries and push notifications
+      reversed.forEach(e => {
+        const key = `${e.timestamp}-${e.explanation?.decision}-${e.explanation?.bus_id}`;
+        if (!seenIdsRef.current.has(key)) {
+          seenIdsRef.current.add(key);
+          if (seenIdsRef.current.size > 5) { // skip initial batch
+            addNotification({
+              type: 'ai_decision',
+              title: e.explanation?.decision || e.message,
+              message: e.explanation?.reasoning?.slice(0, 120) || e.message,
+              busLabel: e.explanation?.bus_id?.replace('bus_0', 'Bus '),
+              bus_id: e.explanation?.bus_id,
+              confidence: e.explanation?.confidence,
+            });
+          }
+        }
+      });
+
+      setEntries(reversed.slice(0, 50));
+    } catch { /* */ }
+  }, [addNotification]);
 
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const resp = await fetch(`${API_BASE}/api/system-log`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setEntries(data.filter(e => e.explanation).slice(-8));
-        }
-      } catch { /* */ }
-    };
     poll();
-    const iv = setInterval(poll, 2000);
+    const iv = setInterval(poll, 2500);
     return () => clearInterval(iv);
-  }, []);
+  }, [poll]);
+
+  // Filter by bus if provided
+  let display = entries;
+  if (busFilter) {
+    display = entries.filter(e => e.explanation?.bus_id === busFilter);
+  }
+
+  // Sort toggle: newest first (default) or oldest first
+  if (sortAsc) {
+    display = [...display].reverse();
+  }
 
   return (
-    <div className="card-panel p-3 flex flex-col gap-1.5 h-full overflow-hidden">
-      <div className="flex items-center gap-1.5 pb-1 border-b border-gray-100">
-        <span className="text-indigo-500"><BotIcon /></span>
-        <span className="text-[10px] font-bold text-gray-600 tracking-wide uppercase">AI Decisions</span>
-        <span className="ml-auto text-[9px] text-gray-400">{entries.length} events</span>
+    <div className="zk-card" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        paddingBottom: '6px', borderBottom: '1px solid var(--color-border)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text)' }}>AI Decisions</span>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{display.length}</span>
+        </div>
+        <button onClick={() => setSortAsc(!sortAsc)} style={{
+          fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px',
+          border: '1px solid var(--color-border)', cursor: 'pointer',
+          background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)',
+        }}>
+          {sortAsc ? '↓ Oldest First' : '↑ Newest First'}
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-1">
-        {entries.length === 0 && (
-          <p className="text-[10px] text-gray-300 italic text-center py-4">No AI decisions yet</p>
+      {/* Entries */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {display.length === 0 && (
+          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>
+            {busFilter ? `No decisions for this bus yet. Monitoring...` : 'No AI decisions yet'}
+          </p>
         )}
-        {entries.map((entry, i) => {
+        {display.map((entry, i) => {
           const exp = entry.explanation || {};
           const decision = exp.decision || entry.message || '';
-          const borderCls = BORDER_COLORS[decision] || 'border-l-gray-300';
-          const bgCls = BG_COLORS[decision] || 'bg-gray-50';
+          const borderColor = BORDER_COLORS[decision] || 'var(--color-border)';
+          const bgColor = isDark ? (BG_DARK[decision] || 'transparent') : (BG_LIGHT[decision] || 'transparent');
           const isExpanded = expandedIdx === i;
+          const recent = isRecent(entry.timestamp);
 
           return (
-            <div key={i} className={`border-l-[3px] ${borderCls} ${bgCls} rounded-r-lg px-2.5 py-1.5 transition-all`}>
+            <div key={i} style={{
+              borderLeft: `3px solid ${borderColor}`,
+              background: bgColor,
+              borderRadius: '0 8px 8px 0',
+              padding: '8px 12px',
+              transition: 'all 0.15s',
+            }}>
               {/* Header row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-indigo-400"><BotIcon /></span>
-                  <span className="text-[9px] font-mono text-gray-400">{entry.timestamp}</span>
-                  <span className="text-[10px] font-semibold text-gray-700">{decision}</span>
-                  {exp.bus_id && (
-                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
-                      {exp.bus_id.replace('bus_0', '').replace('bus_', '')}
-                    </span>
-                  )}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--color-text-muted)' }}>{entry.timestamp}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text)' }}>{decision}</span>
+                {exp.bus_id && (
+                  <span style={{
+                    fontSize: '11px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
+                    background: isDark ? '#1e293b' : '#e2e8f0', color: 'var(--color-text-secondary)',
+                  }}>{exp.bus_id.replace('bus_0', '').replace('bus_', '')}</span>
+                )}
+                {recent && <span className="new-badge">NEW</span>}
               </div>
 
               {/* Trigger */}
               {exp.trigger && (
-                <p className="text-[9px] text-gray-500 mt-0.5">Trigger: {exp.trigger}</p>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '2px 0 0' }}>Trigger: {exp.trigger}</p>
               )}
 
               {/* Expand toggle */}
-              <button onClick={() => setExpandedIdx(isExpanded ? null : i)}
-                className="text-[9px] text-indigo-500 font-semibold mt-0.5 hover:text-indigo-700 transition-colors">
+              <button onClick={() => setExpandedIdx(isExpanded ? null : i)} style={{
+                fontSize: '12px', fontWeight: 600, color: '#6366f1', marginTop: '4px',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              }}>
                 {isExpanded ? '▼ Hide Reasoning' : '▶ View Reasoning'}
               </button>
 
               {/* Expanded reasoning */}
               {isExpanded && (
-                <div className="mt-1.5 pt-1.5 border-t border-gray-200/60 space-y-1.5">
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--color-border)' }}>
                   {exp.reasoning && (
-                    <p className="text-[10px] text-gray-600 leading-relaxed">{exp.reasoning}</p>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 6px' }}>{exp.reasoning}</p>
                   )}
-                  <div className="flex items-center gap-4 flex-wrap">
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {exp.confidence != null && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-gray-400">Confidence:</span>
-                        <ConfidenceBar value={exp.confidence} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Confidence:</span>
+                        <div style={{ width: '60px', height: '6px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: '3px', width: `${Math.round(exp.confidence * 100)}%`,
+                            background: exp.confidence >= 0.75 ? '#22c55e' : exp.confidence >= 0.5 ? '#eab308' : '#ef4444',
+                          }} />
+                        </div>
+                        <span style={{
+                          fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                          color: exp.confidence >= 0.75 ? '#22c55e' : exp.confidence >= 0.5 ? '#eab308' : '#ef4444',
+                        }}>{Math.round(exp.confidence * 100)}%</span>
                       </div>
                     )}
                     {exp.expected_duration && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-gray-400">Duration:</span>
-                        <span className="text-[10px] font-semibold text-gray-700">{exp.expected_duration}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Duration:</span>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>{exp.expected_duration}</span>
                       </div>
                     )}
                   </div>
                   {exp.action && (
-                    <p className="text-[9px] text-indigo-600 font-medium">Action: {exp.action}</p>
+                    <p style={{ fontSize: '12px', color: '#6366f1', fontWeight: 500, margin: '6px 0 0' }}>Action: {exp.action}</p>
                   )}
                 </div>
               )}

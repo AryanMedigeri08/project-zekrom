@@ -1,7 +1,5 @@
 /**
- * CompactStatusStrip — Thin bottom bar shown in 3D mode.
- *
- * Displays key bus metrics in a single horizontal row.
+ * CompactStatusStrip.jsx — Phase 6: Theme-aware bottom bar for 3D mode.
  */
 
 import React from 'react';
@@ -26,36 +24,39 @@ export default function CompactStatusStrip({ bus }) {
   const trafColor = getTrafficColor(bus.traffic_level ?? 'medium');
   const isGhost = bus.is_ghost;
   const statusLabel = isGhost ? 'GHOST' : sig >= 70 ? 'LIVE' : sig >= 40 ? 'SPARSE' : 'WEAK';
-  const statusDot = isGhost ? 'bg-red-500' : sig >= 70 ? 'bg-green-500' : sig >= 40 ? 'bg-yellow-500' : 'bg-red-500';
+  const dotColor = isGhost ? '#ef4444' : sig >= 70 ? '#22c55e' : sig >= 40 ? '#eab308' : '#ef4444';
 
   return (
-    <div className="flex-shrink-0 h-12 bg-gray-900/95 backdrop-blur-md border-t border-gray-800 flex items-center px-5 gap-6 z-40">
+    <div style={{
+      flexShrink: 0, height: '48px', display: 'flex', alignItems: 'center', gap: '20px',
+      padding: '0 20px', zIndex: 40,
+      background: 'var(--color-nav-bg)', borderTop: '1px solid var(--color-border)',
+      backdropFilter: 'blur(12px)',
+    }}>
       {/* Bus label */}
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: sigColor }}>
-          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6" />
-          </svg>
-        </div>
-        <span className="text-sm font-bold text-white">{bus.label || bus.bus_id}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{
+          width: '24px', height: '24px', borderRadius: '6px', background: sigColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: '#fff'
+        }}>BUS</div>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text)' }}>{bus.label || bus.bus_id}</span>
       </div>
 
       <Divider />
 
-      {/* Signal */}
       <StripItem label="Signal">
-        <div className="flex items-center gap-1.5">
-          <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${sig}%`, background: sigColor }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ width: '80px', height: '5px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: '3px', width: `${sig}%`, background: sigColor, transition: 'width 0.5s' }} />
           </div>
-          <span className="text-xs font-bold tabular-nums" style={{ color: sigColor }}>{sig}%</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: sigColor, fontVariantNumeric: 'tabular-nums' }}>{sig}%</span>
         </div>
       </StripItem>
 
       <Divider />
 
       <StripItem label="Speed">
-        <span className="text-xs font-semibold text-gray-200 tabular-nums">
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
           {bus.speed_kmh?.toFixed(1) ?? '—'} km/h
         </span>
       </StripItem>
@@ -63,7 +64,7 @@ export default function CompactStatusStrip({ bus }) {
       <Divider />
 
       <StripItem label="Traffic">
-        <span className="text-xs font-semibold capitalize" style={{ color: trafColor }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: trafColor, textTransform: 'capitalize' }}>
           {bus.traffic_level ?? 'medium'}
         </span>
       </StripItem>
@@ -71,7 +72,7 @@ export default function CompactStatusStrip({ bus }) {
       <Divider />
 
       <StripItem label="Next">
-        <span className="text-xs font-semibold text-gray-200 truncate max-w-[120px]">
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {bus.next_stop || '—'}
         </span>
       </StripItem>
@@ -79,7 +80,7 @@ export default function CompactStatusStrip({ bus }) {
       <Divider />
 
       <StripItem label="Buffer">
-        <span className={`text-xs font-semibold ${bus.buffer_size > 0 ? 'text-orange-400' : 'text-gray-500'}`}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: bus.buffer_size > 0 ? '#f97316' : 'var(--color-text-muted)' }}>
           {bus.buffer_size ?? 0}
         </span>
       </StripItem>
@@ -87,9 +88,9 @@ export default function CompactStatusStrip({ bus }) {
       <Divider />
 
       <StripItem label="Mode">
-        <div className="flex items-center gap-1">
-          <div className={`w-1.5 h-1.5 rounded-full ${statusDot} animate-pulse`} />
-          <span className="text-[10px] font-bold text-gray-400 tracking-wider">{statusLabel}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor, animation: 'signal-blink 1.5s infinite' }} />
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '1px' }}>{statusLabel}</span>
         </div>
       </StripItem>
     </div>
@@ -98,13 +99,13 @@ export default function CompactStatusStrip({ bus }) {
 
 function StripItem({ label, children }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[9px] text-gray-600 font-medium tracking-wide uppercase">{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
       {children}
     </div>
   );
 }
 
 function Divider() {
-  return <div className="w-px h-5 bg-gray-800" />;
+  return <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }} />;
 }

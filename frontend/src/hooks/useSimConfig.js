@@ -60,7 +60,7 @@ export default function useSimConfig() {
         body: JSON.stringify(body),
       });
     } catch (err) {
-      console.warn('[SimConfig] Push failed:', err);
+      console.warn('[Zekrom] SimConfig push failed:', err);
     }
   }, []);
 

@@ -1,5 +1,5 @@
 /**
- * MapLegend — Leaflet control with traffic, signal, dead zone entries.
+ * MapLegend.jsx — Phase 6: Themed, larger fonts.
  */
 
 import React from 'react';
@@ -25,15 +25,15 @@ export default function MapLegend() {
           <div class="legend-item"><div class="legend-line" style="background:#ef4444"></div> High Traffic</div>
           <div class="legend-item"><div class="legend-line" style="background:#4b5563"></div> Traveled</div>
 
-          <h4 style="margin-top:6px">Dead Zones</h4>
+          <h4 style="margin-top:8px">Dead Zones</h4>
           <div class="legend-item"><div class="legend-line" style="background:#7c3aed; border:1px dashed #7c3aed"></div> Blackout Zone</div>
           <div class="legend-item"><div class="legend-line" style="background:#f59e0b; border:1px dotted #f59e0b"></div> Weak Zone</div>
 
-          <h4 style="margin-top:6px">Markers</h4>
-          <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Strong Signal (&gt;70%)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div> Weak Signal (40-70%)</div>
+          <h4 style="margin-top:8px">Markers</h4>
+          <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Strong (&gt;70%)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div> Weak (40-70%)</div>
           <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Critical (&lt;40%)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div> MITAOE Destination</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div> MITAOE Dest.</div>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -45,10 +45,7 @@ export default function MapLegend() {
     legendRef.current = legend;
 
     return () => {
-      if (legendRef.current) {
-        legendRef.current.remove();
-        legendRef.current = null;
-      }
+      if (legendRef.current) { legendRef.current.remove(); legendRef.current = null; }
     };
   }, [map]);
 

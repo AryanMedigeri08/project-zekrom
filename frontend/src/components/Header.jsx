@@ -1,16 +1,14 @@
 /**
- * Header.jsx — Top bar with system name, fleet status, live clock, alerts.
+ * Header.jsx — Zekrom branding, tab switcher, bell, theme toggle, alerts.
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 
-const BusIcon = () => (
-  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-9.75a3.375 3.375 0 00-3.375-3.375h-9A3.375 3.375 0 005.25 7.875v6.375m13.5 4.5V7.875" />
-  </svg>
-);
-
-export default function Header({ buses, isConnected, mode, selectedBus, simDrawerOpen, onToggleSimDrawer }) {
+export default function Header({ buses, isConnected, mode, selectedBus, activeTab, onTabChange }) {
+  const { theme, toggleTheme } = useTheme();
+  const { unreadCount, toggleNotifications } = useNotifications();
   const [clock, setClock] = useState('');
 
   useEffect(() => {
@@ -21,62 +19,142 @@ export default function Header({ buses, isConnected, mode, selectedBus, simDrawe
   }, []);
 
   const busEntries = Object.values(buses || {});
-  const activeCount = busEntries.length;
   const alertCount = busEntries.filter(b => b.is_ghost || (b.signal_strength ?? 85) < 40 || b.in_dead_zone).length;
 
   return (
-    <header className="h-14 flex items-center justify-between px-5 border-b border-gray-200 bg-white/95 backdrop-blur-sm z-20 flex-shrink-0">
-      {/* Left: branding */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center shadow-sm">
-          <BusIcon />
-        </div>
+    <header style={{
+      height: '56px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 20px',
+      borderBottom: '1px solid var(--color-border)',
+      background: 'var(--color-nav-bg)',
+      zIndex: 20,
+      flexShrink: 0,
+    }}>
+      {/* Left: Zekrom branding */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '10px',
+          background: 'linear-gradient(135deg, #6366f1, #14b8a6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+          fontSize: '18px', color: '#fff', fontWeight: 800
+        }}>Z</div>
         <div>
-          <h1 className="text-sm font-bold text-gray-800 tracking-tight leading-tight">
-            TransitIQ <span className="text-indigo-600 font-extrabold">Live Fleet Monitor</span>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.2, margin: 0 }}>
+            Zekrom
           </h1>
-          <p className="text-[8px] text-gray-400 font-medium tracking-[0.15em] -mt-0.5">PUNE TRANSIT NETWORK</p>
+          <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 500, letterSpacing: '1.5px', margin: 0, lineHeight: 1 }}>
+            RESILIENT FLEET MONITOR
+          </p>
         </div>
       </div>
 
-      {/* Center: status */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-teal-500' : 'bg-red-500'} animate-pulse`} />
-          <span className="text-[10px] font-semibold text-gray-600">
-            {activeCount} buses active
+      {/* Center: Tab switcher (only in 2D) */}
+      {mode === '2d' && (
+        <div style={{
+          display: 'flex', borderRadius: '8px', overflow: 'hidden',
+          border: '1px solid var(--color-border)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}>
+          <button onClick={() => onTabChange('live')} style={{
+            padding: '6px 18px', fontSize: '13px', fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: '6px',
+            border: 'none', borderRight: '1px solid var(--color-border)', cursor: 'pointer',
+            background: activeTab === 'live' ? (theme === 'dark' ? '#0d3331' : '#f0fdfa') : 'var(--color-bg-card)',
+            color: activeTab === 'live' ? '#14b8a6' : 'var(--color-text-muted)',
+          }}>
+            <svg style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            Live Map
+          </button>
+          <button onClick={() => onTabChange('simulation')} style={{
+            padding: '6px 18px', fontSize: '13px', fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: '6px',
+            border: 'none', cursor: 'pointer',
+            background: activeTab === 'simulation' ? (theme === 'dark' ? '#1e1338' : '#faf5ff') : 'var(--color-bg-card)',
+            color: activeTab === 'simulation' ? '#8b5cf6' : 'var(--color-text-muted)',
+          }}>
+            <svg style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5" />
+            </svg>
+            Simulation Lab
+          </button>
+        </div>
+      )}
+
+      {mode === '3d' && selectedBus && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '4px 12px', borderRadius: '8px',
+          background: theme === 'dark' ? '#1e1b4b' : '#eef2ff',
+          border: '1px solid #6366f1',
+        }}>
+          <svg style={{ width: '14px', height: '14px', color: '#6366f1' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+          </svg>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#6366f1' }}>3D: {selectedBus.label}</span>
+        </div>
+      )}
+
+      {/* Right: alerts + clock + bell + theme */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '4px 12px', borderRadius: '999px',
+          background: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+        }}>
+          <div style={{
+            width: '8px', height: '8px', borderRadius: '50%',
+            background: isConnected ? '#22c55e' : '#ef4444',
+            boxShadow: `0 0 6px ${isConnected ? '#22c55e' : '#ef4444'}`,
+            animation: 'signal-blink 1.5s infinite',
+          }} />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+            {busEntries.length} buses
           </span>
           {alertCount > 0 && (
             <>
-              <span className="text-gray-300">|</span>
-              <span className="text-[10px] font-bold text-red-500">{alertCount} alert{alertCount > 1 ? 's' : ''}</span>
+              <span style={{ color: 'var(--color-border)' }}>|</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#ef4444' }}>
+                {alertCount} alert{alertCount > 1 ? 's' : ''}
+              </span>
             </>
           )}
         </div>
 
-        {mode === '3d' && selectedBus && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200">
-            <svg className="w-3 h-3 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-            </svg>
-            <span className="text-[10px] font-bold text-indigo-700">3D: {selectedBus.label}</span>
-          </div>
-        )}
-      </div>
+        <span style={{ fontSize: '13px', fontFamily: 'monospace', color: 'var(--color-text-muted)', letterSpacing: '1px' }}>
+          {clock}
+        </span>
 
-      {/* Right: clock + sim toggle */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-mono text-gray-400 tracking-wider">{clock}</span>
-        <button onClick={onToggleSimDrawer}
-          className={`px-3 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
-            simDrawerOpen
-              ? 'bg-purple-50 border-purple-300 text-purple-700'
-              : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-700'
-          }`}>
-          <svg className="w-3 h-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5" />
-          </svg>
-          Simulation
+        {/* Notification bell */}
+        <button onClick={toggleNotifications} className="notification-bell" style={{
+          position: 'relative', background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: '14px', fontWeight: 700, padding: '4px', color: 'var(--color-text)'
+        }}>
+          Alerts
+          {unreadCount > 0 && (
+            <span style={{
+              position: 'absolute', top: '-2px', right: '-4px',
+              fontSize: '10px', fontWeight: 800, color: '#fff',
+              background: '#ef4444', borderRadius: '999px',
+              padding: '1px 5px', minWidth: '16px', textAlign: 'center',
+              lineHeight: '14px',
+            }}>{unreadCount}</span>
+          )}
+        </button>
+
+        {/* Theme toggle */}
+        <button onClick={toggleTheme} className="theme-toggle" title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: '14px', fontWeight: 700, padding: '4px', transition: 'transform 0.3s ease', color: 'var(--color-text)'
+        }}>
+          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
         </button>
       </div>
     </header>

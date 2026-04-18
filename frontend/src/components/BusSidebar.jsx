@@ -1,10 +1,10 @@
 /**
- * BusSidebar — Phase 5: Priority-sorted bus cards with confidence bars.
+ * BusSidebar.jsx — Phase 6: Priority sort, bigger fonts, themed.
  */
 
 import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 
-// Priority scoring
 function computePriority(bus) {
   let score = 0;
   const sig = bus.signal_strength ?? 85;
@@ -17,33 +17,15 @@ function computePriority(bus) {
 }
 
 function getPriorityBadge(score) {
-  if (score > 150) return { label: 'CRITICAL', color: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca' };
-  if (score >= 100) return { label: 'HIGH', color: '#f97316', bgColor: '#fff7ed', borderColor: '#fed7aa' };
-  if (score >= 50) return { label: 'MEDIUM', color: '#eab308', bgColor: '#fefce8', borderColor: '#fef08a' };
-  return { label: 'NOMINAL', color: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0' };
+  if (score > 150) return { label: 'CRITICAL', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' };
+  if (score >= 100) return { label: 'HIGH', color: '#f97316', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)' };
+  if (score >= 50) return { label: 'MEDIUM', color: '#eab308', bg: 'rgba(234,179,8,0.1)', border: 'rgba(234,179,8,0.3)' };
+  return { label: 'NOMINAL', color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.3)' };
 }
 
-function getSignalColor(sig) {
-  if (sig >= 70) return '#22c55e';
-  if (sig >= 40) return '#eab308';
-  return '#ef4444';
-}
+export default function BusSidebar({ buses, selectedBusId, onSelectBus, mode, hideTrackButton = false }) {
+  const { theme } = useTheme();
 
-function getConfidenceColor(val) {
-  const pct = (val || 0) * 100;
-  if (pct >= 75) return '#22c55e';
-  if (pct >= 50) return '#eab308';
-  return '#ef4444';
-}
-
-const CubeIcon = () => (
-  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-  </svg>
-);
-
-export default function BusSidebar({ buses, selectedBusId, onSelectBus, mode }) {
-  // Sort by priority (highest first)
   const sortedBuses = useMemo(() => {
     return Object.entries(buses || {})
       .map(([id, b]) => ({ ...b, bus_id: id, _priority: computePriority(b) }))
@@ -51,116 +33,108 @@ export default function BusSidebar({ buses, selectedBusId, onSelectBus, mode }) 
   }, [buses]);
 
   const alertCount = sortedBuses.filter(b => b._priority >= 100).length;
-  const nominalCount = sortedBuses.length - alertCount;
 
   return (
-    <div className="flex flex-col gap-2 h-full overflow-y-auto">
-      {/* Summary strip */}
-      <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflowY: 'auto' }}>
+      {/* Summary */}
+      <div className="zk-card" style={{
+        padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
         {alertCount > 0 ? (
-          <span className="text-[10px] font-bold text-red-500">
-            <svg className="w-3 h-3 inline mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
-            </svg>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444' }}>
             {alertCount} bus{alertCount > 1 ? 'es' : ''} need attention
           </span>
         ) : (
-          <span className="text-[10px] font-bold text-green-600">All buses nominal</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#22c55e' }}>All buses nominal</span>
         )}
-        <span className="text-[10px] text-gray-400">{nominalCount} OK</span>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{sortedBuses.length - alertCount} OK</span>
       </div>
 
       {/* Bus cards */}
       {sortedBuses.map((bus) => {
-        const busId = bus.bus_id;
         const badge = getPriorityBadge(bus._priority);
         const sig = bus.signal_strength ?? 85;
-        const sigColor = getSignalColor(sig);
+        const sigColor = sig >= 70 ? '#22c55e' : sig >= 40 ? '#eab308' : '#ef4444';
         const conf = bus.confidence_score ?? 0.8;
-        const confColor = getConfidenceColor(conf);
-        const isSelected = selectedBusId === busId && mode === '3d';
+        const confColor = conf >= 0.75 ? '#22c55e' : conf >= 0.5 ? '#eab308' : '#ef4444';
+        const isSelected = selectedBusId === bus.bus_id && mode === '3d';
 
         return (
-          <div key={busId}
-            className={`card-panel p-2.5 flex flex-col gap-1.5 transition-all min-w-[220px] ${
-              isSelected ? 'ring-2 ring-indigo-400 ring-offset-1' : ''
-            }`}
-            style={{ borderLeftWidth: '3px', borderLeftColor: bus.color || '#888' }}>
-            {/* Row 1: Label + Priority badge */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px] font-bold text-gray-800" style={{ whiteSpace: 'nowrap', overflow: 'visible' }}>
-                  {bus.label || busId}
-                </div>
-                <div className="text-[10px] text-gray-500" style={{ whiteSpace: 'nowrap', overflow: 'visible' }}>
-                  {bus.route_name || bus.route_id}
-                </div>
+          <div key={bus.bus_id} className="zk-card" style={{
+            padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px',
+            borderLeft: `3px solid ${bus.color || '#888'}`,
+            outline: isSelected ? '2px solid #6366f1' : 'none',
+            outlineOffset: '1px',
+          }}>
+            {/* Label + badge */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.3 }}>{bus.label || bus.bus_id}</div>
+                <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>{bus.route_name || bus.route_id}</div>
               </div>
-              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full border"
-                style={{ color: badge.color, backgroundColor: badge.bgColor, borderColor: badge.borderColor }}>
-                {badge.label}
-              </span>
+              <span style={{
+                fontSize: '12px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px',
+                border: `1px solid ${badge.border}`, background: badge.bg, color: badge.color,
+              }}>{badge.label}</span>
             </div>
 
             {/* Signal bar */}
             <div>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[9px] text-gray-400">Signal</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: sigColor }}>{sig}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Signal</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: sigColor, fontVariantNumeric: 'tabular-nums' }}>{sig}%</span>
               </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, sig)}%`, background: sigColor }} />
+              <div style={{ width: '100%', height: '6px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: '3px', width: `${Math.min(100, sig)}%`, background: sigColor, transition: 'width 0.5s' }} />
               </div>
             </div>
 
             {/* Confidence bar */}
             <div>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[9px] text-gray-400">Confidence</span>
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: confColor }}>{Math.round(conf * 100)}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Confidence</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: confColor, fontVariantNumeric: 'tabular-nums' }}>{Math.round(conf * 100)}%</span>
               </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.round(conf * 100)}%`, background: confColor }} />
+              <div style={{ width: '100%', height: '6px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: '3px', width: `${Math.round(conf * 100)}%`, background: confColor, transition: 'width 0.5s' }} />
               </div>
             </div>
 
-            {/* Metrics row */}
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Speed</span>
-                <span className="text-gray-700 font-semibold">{bus.speed_kmh?.toFixed(1) ?? '—'} km/h</span>
+            {/* Metrics grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Speed</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{bus.speed_kmh?.toFixed(1) ?? '—'} km/h</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Traffic</span>
-                <span className="font-semibold capitalize" style={{ color: bus.traffic_level === 'high' ? '#ef4444' : bus.traffic_level === 'low' ? '#22c55e' : '#eab308' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Traffic</span>
+                <span style={{ fontWeight: 600, textTransform: 'capitalize', color: bus.traffic_level === 'high' ? '#ef4444' : bus.traffic_level === 'low' ? '#22c55e' : '#eab308' }}>
                   {bus.traffic_level ?? 'medium'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Buffer</span>
-                <span className={`font-semibold ${bus.buffer_size > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                  {bus.buffer_size ?? 0}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Buffer</span>
+                <span style={{ fontWeight: 600, color: bus.buffer_size > 0 ? '#f97316' : 'var(--color-text-muted)' }}>{bus.buffer_size ?? 0}</span>
               </div>
               {bus.dead_zone?.active && (
-                <div className="flex justify-between col-span-2">
-                  <span className="text-purple-500 font-semibold text-[9px]">
-                    DZ: {bus.dead_zone.name}
-                  </span>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#7c3aed' }}>DZ: {bus.dead_zone.name}</span>
                 </div>
               )}
             </div>
 
             {/* Track in 3D button */}
-            {onSelectBus && (
-              <button onClick={() => onSelectBus(busId)} disabled={isSelected}
-                className={`w-full mt-0.5 py-1 text-[9px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                  isSelected
-                    ? 'bg-indigo-100 text-indigo-400 border border-indigo-200 cursor-default'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                }`}>
-                <CubeIcon />
-                {isSelected ? 'Currently Tracking' : 'Track in 3D'}
+            {onSelectBus && !hideTrackButton && (
+              <button onClick={() => onSelectBus(bus.bus_id)} disabled={isSelected} style={{
+                width: '100%', padding: '6px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: isSelected ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                background: isSelected ? 'var(--color-bg-secondary)' : '#6366f1',
+                color: isSelected ? 'var(--color-text-muted)' : '#fff',
+              }}>
+                <svg style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                </svg>
+                {isSelected ? 'Tracking' : 'Track in 3D'}
               </button>
             )}
           </div>

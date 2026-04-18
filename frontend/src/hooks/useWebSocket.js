@@ -1,8 +1,8 @@
 /**
- * useWebSocket — Phase 5: 5 buses, dead zones, ghost pings, AI explanations.
+ * useWebSocket — Phase 6: Zekrom WS hook with notification callbacks.
  *
- * Now stores: dead_zones, mitaoe, ghost_confidence, explanation, dead_zone per bus.
- * Ghost pings ALWAYS update bus position (never ignored).
+ * Stores: routes, buses, signalHistory, bufferedPings, deadZones, mitaoe.
+ * Fires notification callbacks for ghost, dead zone, buffer flush, signal events.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -12,7 +12,7 @@ const MAX_SIGNAL_HISTORY = 40;
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 
-export default function useWebSocket() {
+export default function useWebSocket(notifyFn) {
   const [isConnected, setIsConnected] = useState(false);
   const [routes, setRoutes] = useState({});
   const [buses, setBuses] = useState({});
@@ -25,6 +25,13 @@ export default function useWebSocket() {
   const reconnectDelay = useRef(RECONNECT_DELAY_MS);
   const reconnectTimer = useRef(null);
   const tickCounter = useRef(0);
+  const notifyRef = useRef(notifyFn);
+  const prevBusState = useRef({}); // track state changes for notifications
+
+  // Keep ref current
+  useEffect(() => { notifyRef.current = notifyFn; }, [notifyFn]);
+
+  const notify = useCallback((n) => { if (notifyRef.current) notifyRef.current(n); }, []);
 
   const clearBufferedPings = useCallback((busId) => {
     setBufferedPings((prev) => ({ ...prev, [busId]: [] }));
@@ -57,7 +64,7 @@ export default function useWebSocket() {
         const msg = JSON.parse(event.data);
         handleMessage(msg);
       } catch (e) {
-        console.warn('[WS] Parse error:', e);
+        console.warn('[Zekrom] WS parse error:', e);
       }
     };
   }, []);
@@ -102,6 +109,9 @@ export default function useWebSocket() {
             };
           }
           setBuses(busMap);
+          prevBusState.current = Object.fromEntries(
+            Object.entries(busMap).map(([id, b]) => [id, { is_ghost: b.is_ghost, signal_strength: b.signal_strength, in_dead_zone: false }])
+          );
         }
         break;
       }
@@ -119,40 +129,58 @@ export default function useWebSocket() {
             if (trail.length > 30) trail.shift();
           }
 
-          return {
-            ...prev,
-            [busId]: {
-              ...old,
-              id: busId,
-              lat: data.lat,
-              lng: data.lng,
-              speed_kmh: data.speed_kmh,
-              heading: data.heading_degrees,
-              signal_strength: data.signal_strength,
-              traffic_level: data.traffic_level,
-              is_ghost: data.is_ghost || data.ping_type === 'ghost',
-              ghost_confidence: data.ghost_confidence ?? null,
-              ping_type: data.ping_type,
-              next_stop: data.next_stop,
-              stop_index: data.stop_index,
-              route_progress: data.route_progress,
-              geometry_index: data.geometry_index,
-              buffer_size: msg.buffer_size ?? 0,
-              confidence_score: data.confidence_score ?? old.confidence_score,
-              in_dead_zone: !!data.dead_zone?.active,
-              dead_zone: data.dead_zone ?? null,
-              explanation: data.explanation ?? null,
-              timestamp: data.timestamp,
-              label: data.label || old.label,
-              route_id: data.route_id || old.route_id,
-              route_name: data.route_name || old.route_name,
-              color: data.color || old.color,
-              trail,
-            },
+          const newBus = {
+            ...old,
+            id: busId,
+            lat: data.lat,
+            lng: data.lng,
+            speed_kmh: data.speed_kmh,
+            heading: data.heading_degrees,
+            signal_strength: data.signal_strength,
+            traffic_level: data.traffic_level,
+            is_ghost: data.is_ghost || data.ping_type === 'ghost',
+            ghost_confidence: data.ghost_confidence ?? null,
+            ping_type: data.ping_type,
+            next_stop: data.next_stop,
+            stop_index: data.stop_index,
+            route_progress: data.route_progress,
+            geometry_index: data.geometry_index,
+            buffer_size: msg.buffer_size ?? 0,
+            confidence_score: data.confidence_score ?? old.confidence_score,
+            in_dead_zone: !!data.dead_zone?.active,
+            dead_zone: data.dead_zone ?? null,
+            explanation: data.explanation ?? null,
+            timestamp: data.timestamp,
+            label: data.label || old.label,
+            route_id: data.route_id || old.route_id,
+            route_name: data.route_name || old.route_name,
+            color: data.color || old.color,
+            trail,
           };
+
+          // Generate notifications on state changes
+          const prevState = prevBusState.current[busId] || {};
+          const busLabel = newBus.label || busId;
+
+          if (newBus.is_ghost && !prevState.is_ghost) {
+            notify({ type: 'ghost_activated', title: 'Ghost Bus Activated', message: `${busLabel} lost signal, switching to estimated tracking`, busLabel, bus_id: busId });
+          }
+          if (!newBus.is_ghost && prevState.is_ghost) {
+            notify({ type: 'signal_restored', title: 'Signal Restored', message: `${busLabel} regained live signal`, busLabel, bus_id: busId });
+          }
+          if (newBus.in_dead_zone && !prevState.in_dead_zone) {
+            const dzName = newBus.dead_zone?.name || 'Unknown';
+            notify({ type: 'dead_zone_entry', title: 'Dead Zone Entry', message: `${busLabel} entered ${dzName}`, busLabel, bus_id: busId });
+          }
+          if (data.signal_strength < 40 && (prevState.signal_strength ?? 85) >= 40) {
+            notify({ type: 'signal_weak', title: 'Signal Weak', message: `${busLabel} signal dropped to ${data.signal_strength}%`, busLabel, bus_id: busId });
+          }
+
+          prevBusState.current[busId] = { is_ghost: newBus.is_ghost, signal_strength: data.signal_strength, in_dead_zone: newBus.in_dead_zone };
+
+          return { ...prev, [busId]: newBus };
         });
 
-        // Update signal history
         tickCounter.current += 1;
         setSignalHistory((prev) => {
           const hist = [...(prev[busId] || [])];
@@ -167,14 +195,14 @@ export default function useWebSocket() {
         const busId = msg.bus_id;
         if (!busId) break;
         setBufferedPings((prev) => ({ ...prev, [busId]: msg.pings || [] }));
-        setBuses((prev) => ({
-          ...prev,
-          [busId]: {
-            ...(prev[busId] || {}),
-            is_ghost: false,
-            buffer_size: 0,
-          },
-        }));
+        setBuses((prev) => {
+          const busLabel = prev[busId]?.label || busId;
+          notify({ type: 'buffer_flush', title: 'Buffer Flush', message: `${busLabel} flushed ${(msg.pings || []).length} buffered pings`, busLabel, bus_id: busId });
+          return {
+            ...prev,
+            [busId]: { ...(prev[busId] || {}), is_ghost: false, buffer_size: 0 },
+          };
+        });
         break;
       }
 
@@ -205,7 +233,7 @@ export default function useWebSocket() {
       default:
         break;
     }
-  }, []);
+  }, [notify]);
 
   useEffect(() => {
     connect();

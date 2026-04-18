@@ -175,7 +175,7 @@ async def heartbeat_loop():
 
 # ── FastAPI App ───────────────────────────────────────────────
 
-app = FastAPI(title="Resilient Transport Tracker", version="5.0.0", lifespan=lifespan)
+app = FastAPI(title="Zekrom API", version="6.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

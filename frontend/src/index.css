@@ -5,52 +5,79 @@
 @tailwind utilities;
 
 /* ================================================================
-   Phase 5 — Light Mode, 5 Buses, Dead Zones, Hybrid 2D/3D
+   Zekrom — Phase 6: Full Theme System + Font Sizes + Variables
    ================================================================ */
 
 :root {
-  --color-cyan: #0d9488;
-  --color-red: #dc2626;
-  --color-orange: #ea580c;
-  --color-blue: #0284c7;
-  --color-purple: #7c3aed;
-  --color-green: #16a34a;
+  /* Font sizes — no text below 12px */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-base: 16px;
+  --font-md: 18px;
+  --font-lg: 20px;
+  --font-xl: 24px;
+  --font-2xl: 28px;
+
+  /* Default dark theme — overridden by ThemeContext JS */
+  --color-bg: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-card: #111111;
+  --color-bg-card-hover: #1a1a1a;
+  --color-border: #222222;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #475569;
+  --color-nav-bg: #050505;
+  --color-panel-bg: #0d0d0d;
+  --color-input-bg: #1a1a1a;
+  --color-scrollbar: #333333;
+
+  /* Signal colors (static) */
   --signal-green: #22c55e;
   --signal-yellow: #eab308;
   --signal-red: #ef4444;
 }
 
+* { box-sizing: border-box; }
+
+body {
+  font-size: var(--font-base);
+  line-height: 1.6;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 .leaflet-container:focus { outline: none; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--color-scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
 /* ================================================================
-   Square Map Container
+   Zekrom Card
    ================================================================ */
-.map-wrapper {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  max-width: 640px;
-  flex-shrink: 0;
-}
-.map-wrapper > div {
-  width: 100%;
-  height: 100%;
+.zk-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: background 0.2s, border-color 0.2s;
 }
 
-/* ================================================================
-   Card Panel
-   ================================================================ */
+.zk-card:hover {
+  background: var(--color-bg-card-hover);
+}
+
+/* Legacy support */
 .card-panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
 }
 
 /* ================================================================
@@ -59,10 +86,10 @@
 .stop-marker {
   width: 10px;
   height: 10px;
-  background: var(--color-blue);
-  border: 2px solid #fff;
+  background: #3b82f6;
+  border: 2px solid var(--color-bg-card);
   border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 
 /* ================================================================
@@ -185,7 +212,7 @@
 .transition-overlay {
   position: fixed;
   inset: 0;
-  background: #0f172a;
+  background: var(--color-bg);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -206,28 +233,24 @@
   align-items: center;
   gap: 12px;
 }
-
 .transition-title {
-  color: #e2e8f0;
+  color: var(--color-text);
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 1px;
 }
-
 .transition-sub {
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
-
 .transition-bar {
   width: 200px;
   height: 3px;
-  background: #1e293b;
+  background: var(--color-border);
   border-radius: 2px;
   overflow: hidden;
   margin-top: 4px;
 }
-
 .transition-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #6366f1, #8b5cf6);
@@ -241,26 +264,90 @@
 }
 
 /* ================================================================
-   Dead Zone Popup
+   Zekrom Popup (Leaflet)
    ================================================================ */
-.dead-zone-popup .leaflet-popup-content-wrapper {
-  border-radius: 10px;
-  padding: 0;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+.zekrom-popup {
+  max-width: 280px !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
 }
-.dead-zone-popup .leaflet-popup-content {
-  margin: 12px 16px;
+.zekrom-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
-.dead-zone-popup .leaflet-popup-tip {
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+.zekrom-popup .leaflet-popup-content {
+  margin: 12px 16px !important;
+  width: auto !important;
+  max-width: 248px !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+.zekrom-popup .leaflet-popup-content p {
+  margin: 6px 0 !important;
+  font-size: 13px !important;
+}
+.zekrom-popup .leaflet-popup-tip {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+.zekrom-tooltip {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  background: var(--color-bg-card) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+}
+
+.zekrom-tooltip-mitaoe {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  background: #6366f1 !important;
+  color: #fff !important;
+  border: none !important;
 }
 
 /* ================================================================
-   Dead Zone Pulse (on polyline hover areas)
+   NEW Badge (AI Decision Log)
    ================================================================ */
-@keyframes deadZonePulse {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.45; }
+.new-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  background: #6366f1;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 999px;
+  animation: badgePulse 1s ease-in-out 3;
+}
+
+@keyframes badgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ================================================================
+   Notification Drawer Animation
+   ================================================================ */
+@keyframes slideDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.notif-drawer {
+  animation: slideDown 250ms ease-out;
 }
 
 /* ================================================================
@@ -272,24 +359,24 @@ input[type="range"] {
   height: 5px;
   border-radius: 3px;
   outline: none;
-  background: #e2e8f0;
+  background: var(--color-border);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--color-cyan);
-  border: 2px solid #fff;
+  background: #14b8a6;
+  border: 2px solid var(--color-bg-card);
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--color-cyan);
-  border: 2px solid #fff;
+  background: #14b8a6;
+  border: 2px solid var(--color-bg-card);
   cursor: pointer;
 }
 
@@ -310,12 +397,12 @@ input[type="range"]::-moz-range-thumb {
   transform: translateX(-50%);
   width: 200px;
   padding: 8px 10px;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   color: #fff;
   background: #1e293b;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   z-index: 100;
   transition: opacity 0.15s, visibility 0.15s;
   pointer-events: none;
@@ -338,19 +425,20 @@ input[type="range"]::-moz-range-thumb {
    Map Legend
    ================================================================ */
 .map-legend {
-  background: rgba(255,255,255,0.95);
+  background: var(--color-bg-card);
   backdrop-filter: blur(8px);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 10px 14px;
-  font-size: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  line-height: 1.6;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  line-height: 1.7;
+  color: var(--color-text-secondary);
 }
 .map-legend h4 {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
@@ -359,7 +447,8 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #475569;
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 .map-legend .legend-dot {
   width: 8px;
@@ -375,15 +464,13 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ================================================================
-   Simulation Drawer slide-up animation
+   Theme Toggle
    ================================================================ */
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+.theme-toggle {
+  transition: transform 0.3s ease;
 }
-
-.animate-slideUp {
-  animation: slideUp 0.3s ease-out;
+.theme-toggle:active {
+  transform: rotate(180deg);
 }
 
 /* ================================================================
@@ -395,4 +482,13 @@ input[type="range"]::-moz-range-thumb {
 .leaflet-marker-icon:hover {
   transform: scale(1.1);
   filter: brightness(1.1);
+}
+
+/* ================================================================
+   Leaflet attribution
+   ================================================================ */
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: var(--color-bg-card) !important;
+  color: var(--color-text-muted) !important;
 }
