@@ -119,13 +119,13 @@ def main():
         best_model = lr_model
         best_name = "LinearRegression"
 
-    print(f"\n✓ Best model: {best_name}  (RMSE={min(gb_rmse, lr_rmse):.3f})")
+    print(f"\n[OK] Best model: {best_name}  (RMSE={min(gb_rmse, lr_rmse):.3f})")
 
     # ------------------------------------------------------------------
     # 5. Save best model
     # ------------------------------------------------------------------
     joblib.dump(best_model, MODEL_FILE)
-    print(f"✓ Model saved to {MODEL_FILE}")
+    print(f"[OK] Model saved to {MODEL_FILE}")
 
     # ------------------------------------------------------------------
     # 6. Feature importance plot (only for tree-based models)
@@ -160,9 +160,9 @@ def main():
         plt.tight_layout()
         plt.savefig(IMPORTANCE_PLOT, dpi=150, facecolor=fig.get_facecolor())
         plt.close()
-        print(f"✓ Feature importance plot saved to {IMPORTANCE_PLOT}")
+        print(f"[OK] Feature importance plot saved to {IMPORTANCE_PLOT}")
     else:
-        print("⚠ Best model has no feature_importances_; skipping plot.")
+        print("[WARN] Best model has no feature_importances_; skipping plot.")
 
     print("\nDone. Model is ready for the /api/predict-eta endpoint.")
 

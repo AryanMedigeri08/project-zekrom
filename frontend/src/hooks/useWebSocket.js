@@ -1,18 +1,30 @@
 /**
- * useWebSocket — Phase 6: Zekrom WS hook with notification callbacks.
+ * useWebSocket — Phase 9: Dual-endpoint WS hook.
  *
- * Stores: routes, buses, signalHistory, bufferedPings, deadZones, mitaoe.
- * Fires notification callbacks for ghost, dead zone, buffer flush, signal events.
+ * Connects to either /ws/live or /ws/lab based on the `endpoint` prop.
+ * Handles:
+ *  - Ghost → Real reconciliation (no backward animation)
+ *  - Correct distance_km tracking
+ *  - Notification callbacks
+ *
+ * Two completely independent instances can run simultaneously:
+ *   const live = useWebSocket('live', addNotification);
+ *   const lab  = useWebSocket('lab');
+ * They share NO state.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const WS_URL = 'ws://localhost:8000/ws/client';
+const WS_BASE = 'ws://localhost:8000/ws';
 const MAX_SIGNAL_HISTORY = 40;
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 
-export default function useWebSocket(notifyFn) {
+/**
+ * @param {'live'|'lab'} endpoint - which WS endpoint to connect to
+ * @param {Function} notifyFn - optional notification callback
+ */
+export default function useWebSocket(endpoint = 'live', notifyFn) {
   const [isConnected, setIsConnected] = useState(false);
   const [routes, setRoutes] = useState({});
   const [buses, setBuses] = useState({});
@@ -26,10 +38,12 @@ export default function useWebSocket(notifyFn) {
   const reconnectTimer = useRef(null);
   const tickCounter = useRef(0);
   const notifyRef = useRef(notifyFn);
-  const prevBusState = useRef({}); // track state changes for notifications
+  const prevBusState = useRef({});
+  const endpointRef = useRef(endpoint);
 
-  // Keep ref current
+  // Keep refs current
   useEffect(() => { notifyRef.current = notifyFn; }, [notifyFn]);
+  useEffect(() => { endpointRef.current = endpoint; }, [endpoint]);
 
   const notify = useCallback((n) => { if (notifyRef.current) notifyRef.current(n); }, []);
 
@@ -40,7 +54,8 @@ export default function useWebSocket(notifyFn) {
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket(WS_URL);
+    const wsUrl = `${WS_BASE}/${endpointRef.current}`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -64,7 +79,7 @@ export default function useWebSocket(notifyFn) {
         const msg = JSON.parse(event.data);
         handleMessage(msg);
       } catch (e) {
-        console.warn('[Zekrom] WS parse error:', e);
+        console.warn(`[Zekrom ${endpointRef.current}] WS parse error:`, e);
       }
     };
   }, []);
@@ -98,19 +113,26 @@ export default function useWebSocket(notifyFn) {
               next_stop: ping?.next_stop ?? '',
               stop_index: ping?.stop_index ?? 0,
               route_progress: ping?.route_progress ?? 0,
-              geometry_index: ping?.geometry_index ?? 0,
+              distance_km: ping?.distance_km ?? 0,
               buffer_size: bdata.buffer_size ?? 0,
               confidence_score: ping?.confidence_score ?? 0.8,
               in_dead_zone: false,
               dead_zone: ping?.dead_zone ?? null,
               explanation: ping?.explanation ?? null,
               timestamp: ping?.timestamp ?? '',
+              trip_number: ping?.trip_number ?? 1,
               trail: [],
+              isReconciling: false,
             };
           }
           setBuses(busMap);
           prevBusState.current = Object.fromEntries(
-            Object.entries(busMap).map(([id, b]) => [id, { is_ghost: b.is_ghost, signal_strength: b.signal_strength, in_dead_zone: false }])
+            Object.entries(busMap).map(([id, b]) => [id, {
+              is_ghost: b.is_ghost,
+              signal_strength: b.signal_strength,
+              in_dead_zone: false,
+              distance_km: b.distance_km,
+            }])
           );
         }
         break;
@@ -129,6 +151,19 @@ export default function useWebSocket(notifyFn) {
             if (trail.length > 30) trail.shift();
           }
 
+          // ── Ghost → Real reconciliation detection ──
+          const wasGhost = old.is_ghost;
+          const isNowReal = data.ping_type === 'real';
+          const isReconciling = wasGhost && isNowReal;
+
+          let animationDuration = 0;
+          if (isReconciling) {
+            // Check if new position is FORWARD of old position
+            const isForward = (data.distance_km ?? 0) >= (old.distance_km ?? 0);
+            // Smooth forward animation, instant jump if somehow behind
+            animationDuration = isForward ? 1500 : 0;
+          }
+
           const newBus = {
             ...old,
             id: busId,
@@ -144,7 +179,8 @@ export default function useWebSocket(notifyFn) {
             next_stop: data.next_stop,
             stop_index: data.stop_index,
             route_progress: data.route_progress,
-            geometry_index: data.geometry_index,
+            distance_km: data.distance_km ?? old.distance_km ?? 0,
+            ghost_distance_km: data.ghost_distance_km ?? null,
             buffer_size: msg.buffer_size ?? 0,
             confidence_score: data.confidence_score ?? old.confidence_score,
             in_dead_zone: !!data.dead_zone?.active,
@@ -155,7 +191,12 @@ export default function useWebSocket(notifyFn) {
             route_id: data.route_id || old.route_id,
             route_name: data.route_name || old.route_name,
             color: data.color || old.color,
+            trip_number: data.trip_number ?? old.trip_number ?? 1,
             trail,
+
+            // Reconciliation state
+            isReconciling,
+            animationDuration,
 
             // Phase 8: Layer 1 — Adaptive Payload
             prev_signal: data.prev_signal ?? old.prev_signal ?? data.signal_strength,
@@ -219,7 +260,12 @@ export default function useWebSocket(notifyFn) {
             notify({ type: 'signal_weak', title: 'Signal Weak', message: `${busLabel} signal dropped to ${data.signal_strength}%`, busLabel, bus_id: busId });
           }
 
-          prevBusState.current[busId] = { is_ghost: newBus.is_ghost, signal_strength: data.signal_strength, in_dead_zone: newBus.in_dead_zone };
+          prevBusState.current[busId] = {
+            is_ghost: newBus.is_ghost,
+            signal_strength: data.signal_strength,
+            in_dead_zone: newBus.in_dead_zone,
+            distance_km: newBus.distance_km,
+          };
 
           return { ...prev, [busId]: newBus };
         });
@@ -241,9 +287,18 @@ export default function useWebSocket(notifyFn) {
         setBuses((prev) => {
           const busLabel = prev[busId]?.label || busId;
           notify({ type: 'buffer_flush', title: 'Buffer Flush', message: `${busLabel} flushed ${(msg.pings || []).length} buffered pings`, busLabel, bus_id: busId });
+
+          // Accept ghost position — no snap back
+          const reconciliation = msg.reconciliation || {};
           return {
             ...prev,
-            [busId]: { ...(prev[busId] || {}), is_ghost: false, buffer_size: 0 },
+            [busId]: {
+              ...(prev[busId] || {}),
+              is_ghost: false,
+              buffer_size: 0,
+              isReconciling: true,
+              // Keep current lat/lng (ghost position) — do NOT reset
+            },
           };
         });
         break;
@@ -264,6 +319,7 @@ export default function useWebSocket(notifyFn) {
                   confidence_score: hb.confidence_score ?? next[busId].confidence_score,
                   in_dead_zone: hb.in_dead_zone ?? false,
                   dead_zone: hb.dead_zone ?? next[busId].dead_zone,
+                  distance_km: hb.distance_km ?? next[busId].distance_km,
                 };
               }
             }

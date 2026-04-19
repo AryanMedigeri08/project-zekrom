@@ -1,5 +1,9 @@
 /**
- * App.jsx — Phase 6: Zekrom branding, dual tabs, 70:30 layout, NetworkStrip, notifications.
+ * App.jsx — Phase 9: Dual-mode Zekrom with independent Live + Lab WebSocket streams.
+ *
+ * - Live Map tab uses /ws/live (autonomous simulation)
+ * - Simulation Lab uses /ws/lab (slider-controlled)
+ * - They share NO state — completely independent simulations
  */
 
 import React, { useState } from 'react';
@@ -28,11 +32,30 @@ function getTrafficColor(level) {
 
 export default function App() {
   const { addNotification } = useNotifications();
+
+  // ── LIVE WebSocket — autonomous simulation, no slider control ──
   const {
-    isConnected, routes, buses, signalHistory,
-    bufferedPings, clearBufferedPings,
-    deadZones, mitaoe,
-  } = useWebSocket(addNotification);
+    isConnected: liveConnected,
+    routes: liveRoutes,
+    buses: liveBuses,
+    signalHistory: liveSignalHistory,
+    bufferedPings: liveBufferedPings,
+    clearBufferedPings: liveClearBufferedPings,
+    deadZones: liveDeadZones,
+    mitaoe: liveMitaoe,
+  } = useWebSocket('live', addNotification);
+
+  // ── LAB WebSocket — slider controlled simulation ──
+  const {
+    isConnected: labConnected,
+    routes: labRoutes,
+    buses: labBuses,
+    signalHistory: labSignalHistory,
+    bufferedPings: labBufferedPings,
+    clearBufferedPings: labClearBufferedPings,
+    deadZones: labDeadZones,
+    mitaoe: labMitaoe,
+  } = useWebSocket('lab');
 
   const simConfig = useSimConfig();
   const {
@@ -42,9 +65,10 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('live');
 
-  const selectedBus = buses[selectedBusId] || null;
+  // Live map state
+  const selectedBus = liveBuses[selectedBusId] || null;
   const selectedRoute = selectedBusId && selectedBus
-    ? routes[selectedBus.route_id] || null
+    ? liveRoutes[selectedBus.route_id] || null
     : null;
 
   return (
@@ -72,16 +96,16 @@ export default function App() {
 
       {/* Header */}
       <Header
-        buses={buses}
-        isConnected={isConnected}
+        buses={liveBuses}
+        isConnected={liveConnected}
         mode={mode}
         selectedBus={selectedBus}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
 
-      {/* Network Health Strip (always visible) */}
-      <NetworkStrip buses={buses} signalHistory={signalHistory} />
+      {/* Network Health Strip (always visible — shows LIVE data) */}
+      <NetworkStrip buses={liveBuses} signalHistory={liveSignalHistory} />
 
       {/* Notification Center Drawer */}
       <NotificationCenter />
@@ -99,14 +123,14 @@ export default function App() {
               />
             </div>
             <div style={{ width: '320px', flexShrink: 0, padding: '16px 16px 16px 0', overflowY: 'auto' }}>
-              <BusSidebar buses={buses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
+              <BusSidebar buses={liveBuses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
             </div>
           </main>
           <CompactStatusStrip bus={selectedBus} />
         </>
 
       ) : activeTab === 'live' ? (
-        /* ══ LIVE MAP TAB — 70:30 split ══ */
+        /* ══ LIVE MAP TAB — 70:30 split — uses LIVE WebSocket ══ */
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '16px' }}>
           {/* Map (70%) + Sidebar (30%) */}
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '70fr 30fr', gap: '16px', minHeight: 0, overflow: 'hidden' }}>
@@ -114,10 +138,10 @@ export default function App() {
             <div className="glass-card" style={{ overflow: 'hidden', minHeight: 0, padding: '4px' }}>
               <div style={{ width: '100%', height: '100%', borderRadius: '6px', overflow: 'hidden' }}>
                 <MapView
-                  routes={routes}
-                  buses={buses}
-                  deadZones={deadZones}
-                  mitaoe={mitaoe}
+                  routes={liveRoutes}
+                  buses={liveBuses}
+                  deadZones={liveDeadZones}
+                  mitaoe={liveMitaoe}
                   onBusSelect={selectBus}
                   mapId="live-map"
                 />
@@ -127,10 +151,10 @@ export default function App() {
             {/* Right sidebar: Bus cards, ETA, AI — stacked */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', minHeight: 0, paddingRight: '4px' }}>
               <div style={{ flexShrink: 0 }}>
-                <BusSidebar buses={buses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
+                <BusSidebar buses={liveBuses} selectedBusId={selectedBusId} onSelectBus={selectBus} mode={mode} />
               </div>
               <div className="glass-card" style={{ flexShrink: 0, padding: '16px' }}>
-                <ETATimeline buses={buses} routes={routes} simConfig={simConfig} />
+                <ETATimeline buses={liveBuses} routes={liveRoutes} simConfig={simConfig} />
               </div>
               <div style={{ flexShrink: 0, minHeight: '200px' }}>
                 <AIDecisionLog />
@@ -140,14 +164,14 @@ export default function App() {
         </main>
 
       ) : (
-        /* ══ SIMULATION TAB ══ */
+        /* ══ SIMULATION TAB — uses LAB WebSocket ══ */
         <main style={{ flex: 1, overflow: 'hidden', padding: '12px' }}>
           <SimulationDashboard
             simConfig={simConfig}
-            routes={routes}
-            buses={buses}
-            deadZones={deadZones}
-            mitaoe={mitaoe}
+            routes={labRoutes}
+            buses={labBuses}
+            deadZones={labDeadZones}
+            mitaoe={labMitaoe}
           />
         </main>
       )}

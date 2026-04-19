@@ -1,5 +1,10 @@
 /**
- * MapView.jsx — Professional Clean Signal Map
+ * MapView.jsx — Phase 9: Professional Clean Signal Map
+ *
+ * Changes from Phase 8:
+ *   - Default zoom level 13 (shows full route, movement visible)
+ *   - Uses distance_km for route progress instead of geometry_index
+ *   - Focused bus zoom level 15
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -54,9 +59,9 @@ function createMitaoeIcon() {
 const stopIcon = new L.DivIcon({ className: '', html: '<div style="width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #6366f1;box-shadow:0 2px 4px rgba(0,0,0,0.1)"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
 
 function getTrafficColor(level) {
-  if (level === 'low' || level === 0) return '#10b981'; // Emerald
-  if (level === 'high' || level === 2) return '#ef4444'; // Rose
-  return '#f59e0b'; // Amber
+  if (level === 'low' || level === 0) return '#10b981';
+  if (level === 'high' || level === 2) return '#ef4444';
+  return '#f59e0b';
 }
 
 function FitBounds({ routes }) {
@@ -68,21 +73,27 @@ function FitBounds({ routes }) {
     for (const rdata of Object.values(routes)) {
       if (rdata?.geometry) rdata.geometry.forEach(([lat, lng]) => pts.push([lat, lng]));
     }
-    if (pts.length > 0) { map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] }); fitted.current = true; }
+    if (pts.length > 0) {
+      map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 13 });
+      fitted.current = true;
+    }
   }, [routes, map]);
   return null;
 }
 
-function SegmentedRoute({ geometry, busGeometryIndex, trafficLevel }) {
+function SegmentedRoute({ geometry, routeProgress, trafficLevel }) {
   if (!geometry || geometry.length < 2) return null;
   const SEG = 20;
   const tColor = getTrafficColor(trafficLevel);
   const segs = [];
+  const totalSegs = geometry.length - 1;
+
   for (let i = 0; i < geometry.length - 1; i += SEG) {
     const end = Math.min(i + SEG + 1, geometry.length);
     const pts = geometry.slice(i, end);
-    const mid = i + SEG / 2;
-    const behind = mid < (busGeometryIndex || 0);
+    const mid = (i + Math.min(i + SEG, totalSegs)) / 2;
+    const segProgress = mid / totalSegs;
+    const behind = segProgress < (routeProgress || 0);
     segs.push({ positions: pts, color: behind ? 'rgba(99,102,241,0.5)' : tColor, opacity: behind ? 0.5 : 1, behind });
   }
   return <>{segs.map((s, i) => <Polyline key={i} positions={s.positions} pathOptions={{ color: s.color, weight: 5, opacity: s.opacity, lineCap: 'round' }} />)}</>;
@@ -134,6 +145,7 @@ function BusPopup({ bus }) {
   const sigColor = sig >= 70 ? 'var(--signal-green)' : sig >= 40 ? 'var(--signal-amber)' : 'var(--signal-red)';
   const trafColor = bus.traffic_level === 'high' ? 'var(--signal-red)' : bus.traffic_level === 'low' ? 'var(--signal-green)' : 'var(--signal-amber)';
   const conf = bus.confidence_score ?? 0.8;
+  const distKm = bus.distance_km ?? 0;
   return (
     <div style={{ width: '220px', fontSize: '13px', lineHeight: 1.5, color: 'var(--color-text)' }}>
       <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '10px', color: 'var(--color-text)' }}>
@@ -144,6 +156,8 @@ function BusPopup({ bus }) {
         <span className="font-data-display" style={{ fontSize: '14px', color: sigColor }}>{sig}%</span>
         <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', fontWeight: 600 }}>SPEED</span>
         <span className="font-data-display" style={{ fontSize: '14px' }}>{bus.speed_kmh?.toFixed(1) ?? '—'} <span style={{fontSize:'10px', color:'var(--color-text-muted)'}}>km/h</span></span>
+        <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', fontWeight: 600 }}>DISTANCE</span>
+        <span className="font-data-display" style={{ fontSize: '14px' }}>{distKm.toFixed(1)} <span style={{fontSize:'10px', color:'var(--color-text-muted)'}}>km</span></span>
         <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', fontWeight: 600 }}>TRAFFIC</span>
         <span style={{ fontSize: '12px', fontWeight: 600, color: trafColor }}>{(bus.traffic_level ?? 'MEDIUM').toUpperCase()}</span>
         <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', fontWeight: 600 }}>NEXT STOP</span>
@@ -179,13 +193,13 @@ export default function MapView({ routes, buses, deadZones, mitaoe, onBusSelect,
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <MapContainer key={mapId} center={center} zoom={12} style={{ width: '100%', height: '100%', background: '#f8fafc' }} zoomControl={!compact} attributionControl={false} id={mapId}>
+      <MapContainer key={mapId} center={center} zoom={13} style={{ width: '100%', height: '100%', background: '#f8fafc' }} zoomControl={!compact} attributionControl={false} id={mapId}>
         <TileLayer url={tileUrl} attribution="&copy; CARTO" />
         <FitBounds routes={routes} />
 
         {Object.entries(routes || {}).map(([routeId, rdata]) => {
           const bus = Object.values(buses || {}).find(b => b.route_id === routeId);
-          return <SegmentedRoute key={routeId} geometry={rdata.geometry} busGeometryIndex={bus?.geometry_index ?? 0} trafficLevel={bus?.traffic_level ?? 'medium'} />;
+          return <SegmentedRoute key={routeId} geometry={rdata.geometry} routeProgress={bus?.route_progress ?? 0} trafficLevel={bus?.traffic_level ?? 'medium'} />;
         })}
 
         <DeadZoneOverlay routes={routes} deadZones={deadZones} />
