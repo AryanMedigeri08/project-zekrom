@@ -32,7 +32,7 @@ project-zekrom/
     ├── tailwind.config.js
     ├── postcss.config.js
     ├── index.html
-    ├── .env                            # VITE_MAPBOX_TOKEN (create manually, gitignored)
+    ├── .env                            # VITE_MAPBOX_TOKEN (must be created manually)
     └── src/
         ├── main.jsx                    # Entry — ThemeProvider + NotificationProvider
         ├── index.css                   # Logista Slate design system (light mode)
@@ -132,7 +132,7 @@ The app opens at **http://localhost:5173**
 
 ## 🏛️ Architecture Overview
 
-### Phase 9 — Dual Simulation Architecture
+### Dual Simulation Architecture
 
 Zekrom runs **two completely independent simulation systems** that share no state:
 
@@ -141,190 +141,23 @@ Zekrom runs **two completely independent simulation systems** that share no stat
 | **Purpose** | Production-like autonomous tracking | Testing & experimentation |
 | **WebSocket** | `/ws/live` | `/ws/lab` |
 | **Signal Source** | `AutonomousSignalModel` (route geography) | Sliders & scenario presets |
-| **Emitter Class** | `LiveBusEmitter` | `LabBusEmitter` |
-| **State Store** | `live_emitters{}` | `lab_emitters{}` |
 | **Slider Control** | ❌ Never affected | ✅ Full control |
-| **Ghost Activation** | Automatic (dead zones fire by geography) | Manual (signal slider → 0%) |
-
-### Distance-Based Movement
-
-Buses use a **monotonically increasing** `distance_traveled_km` float — never an index that bounces back and forth. Route geometry is pre-computed as a cumulative distance lookup table at startup. Position at any distance is found via binary search + linear interpolation.
-
-**Key invariant:** `distance_traveled_km` only ever increases. When a trip completes, it wraps via modulo and `trip_number` increments.
-
-### Ghost Reconciliation (No Backward Snap)
-
-When signal is lost, the ghost bus continues advancing `ghost_distance_km` forward along the route. On signal restoration:
-1. `distance_traveled_km = ghost_distance_km` (accept ghost position as real)
-2. Buffer flush broadcasts all stored pings
-3. Bus continues forward — **never snaps back** to blackout start
 
 ### 6-Layer Resilience Architecture
 
-Zekrom's core innovation is a **6-layer resilience stack** that activates autonomously based on real-time conditions:
+| Layer | Name | Trigger |
+|-------|------|---------|
+| **L1** | Adaptive Payload & Frequency | Signal delta > 15%, packet loss > 20% |
+| **L2** | Store & Forward Buffer | Signal < 10%, buffer fills |
+| **L3** | Ghost Bus Extrapolation | Real signal lost |
+| **L4** | ML ETA Prediction Engine | Ghost active, ETA recalculated |
+| **L5** | Dead Zone Pre-awareness | Approaching known dead zone |
+| **L6** | WebSocket Connection Resilience | Latency > 200ms, reconnecting |
 
-| Layer | Name | Trigger | Color |
-|-------|------|---------|-------|
-| **L1** | Adaptive Payload & Frequency | Signal delta > 15%, packet loss > 20% | 🔵 Blue `#3b82f6` |
-| **L2** | Store & Forward Buffer | Signal < 10%, buffer fills | 🟢 Teal `#14b8a6` |
-| **L3** | Ghost Bus Extrapolation | Real signal lost | 🟣 Purple `#8b5cf6` |
-| **L4** | ML ETA Prediction Engine | Ghost active, ETA recalculated | 🟡 Amber `#f59e0b` |
-| **L5** | Dead Zone Pre-awareness | Approaching known dead zone | 🟣 Deep Purple `#7c3aed` |
-| **L6** | WebSocket Connection Resilience | Latency > 200ms, reconnecting | 🟢 Green `#22c55e` |
+### Key Design Decisions
 
-### Layer Cascade Scenarios
-
-| Scenario | Cascade Path | Description |
-|----------|-------------|-------------|
-| **Rush Hour** | L4 → L1 | ETA recalculates for traffic, ping frequency adapts |
-| **Dead Zone** | L5 → L3 → L2 → L1 | Pre-awareness fires, ghost activates, buffer engages, payload compresses |
-| **Recovery** | L2 → L3 → L4 → L6 | Buffer flushes, ghost reconciles, ETA stabilizes, connection resumes |
-| **Storm** | All Layers | Full system stress, every layer engages simultaneously |
-
-### Data Flow
-```
-GPS Emitters (5 buses × 2 modes = 10 tasks)
-    │
-    ├─ LIVE emitters (autonomous signal model)
-    │   └─ broadcast → /ws/live clients
-    │
-    ├─ LAB emitters (slider-controlled)
-    │   └─ broadcast → /ws/lab clients
-    │
-    ├─ Per-ping telemetry (~30 fields):
-    │   ├─ Core: lat, lng, speed, heading, signal, distance_km
-    │   ├─ L1: payload_size, ping_interval, bandwidth_saved
-    │   ├─ L2: buffer_count, is_flushing, flush_progress
-    │   ├─ L3: ghost_confidence, confidence_history, deviation
-    │   ├─ L4: eta_data_mode, eta_cone_width, eta_confidence
-    │   ├─ L5: approaching_dead_zone, distance_km, zone_progress
-    │   └─ L6: ws_latency, missed_pings, reconnect_attempt
-    │
-    ├─ Based on signal_strength:
-    │   ├─ ≥70%: emit every 2s (full payload, ~400B)
-    │   ├─ 40–70%: emit every 6s (compressed, ~180B)
-    │   ├─ 10–40%: emit every 12s (minimal, ~64B)
-    │   └─ <10%: buffer pings (dead zone, ~38B ghost)
-    │
-    └─ Independent heartbeats every 1s to both WS channels
-```
-
----
-
-## 📺 UI Tabs
-
-### Tab 1: Live Map (2D)
-- Real-time 5-bus Leaflet map with trail lines and dead zone overlays
-- **Autonomous signal** — buses enter ghost mode naturally in dead zones
-- Priority-sorted bus sidebar with signal bars, speed, heading
-- AI Decision Log (filtered to live/non-simulated decisions only)
-- ETA Timeline with ML-powered confidence cones
-- Default zoom level 13 (city-scale, movement clearly visible)
-
-### Tab 2: 3D View (Mapbox)
-- Mapbox GL 3D terrain with bus HUD overlay
-- Inline AI decision panel filtered per selected bus
-- Compact status strip at bottom
-
-### Tab 3: Simulation Lab (Laboratory)
-Scrollable control center with the following layout:
-
-```
-┌──────────────────────────────────────────────┐
-│  COMPACT CONTROL BAR (sticky)                │
-│  [TARGET: ALL MIT HIN HAD KAT PUN]          │
-│  [Signal ─── Loss ─── Latency ─── ...]      │
-│  [SCENARIO: 🚦RUSH  📡DEAD  🔄RECOVERY ⛈STORM]│
-├─────────────────────┬────────────────────────┤
-│                     │  ⚡ Layer Activity      │
-│                     │    Monitor             │
-│   SIMULATION MAP    │  ┌ Cascade Flow SVG ┐  │
-│       (70%)         │  ├ L1: Adaptive ────┤  │
-│                     │  ├ L2: Buffer ──────┤  │
-│                     │  ├ L3: Ghost ───────┤  │
-│                     │  ├ L4: ETA ─────────┤  │
-│                     │  ├ L5: Dead Zone ───┤  │
-├─────────────────────┤  └ L6: WebSocket ───┘  │
-│  ETA Timeline (70%) │     (30%, expands)     │
-└─────────────────────┴────────────────────────┘
-```
-
-> **Important:** Lab sliders and scenarios only affect the Lab map. The Live Map runs independently with its own autonomous signal model.
-
-**Layer Activity Monitor features:**
-- **Bus Selector** — auto-selects most critical bus or manual override
-- **Cascade Flow SVG** — animated arrows + pulsing nodes showing inter-layer triggering
-- **6 Layer Cards** — each shows:
-  - Active/idle status badge (color-coded per layer)
-  - Trigger reason and internal decision logic
-  - Real-time data (charts, bars, tables)
-  - AI Explanation panel with timestamped decisions
-- **Scenario Banner** — shows active scenario and expected cascade path
-
----
-
-## 🎨 Design System — "Logista Slate"
-
-- **Mode:** Light mode only (permanently locked)
-- **Glassmorphism:** `rgba(255,255,255,0.4)` background, `blur(16px)`, frosted borders
-- **Typography:** Inter, system-ui
-- **Accent Colors:** Indigo `#6366f1`, Emerald `#10b981`
-- **Signal Colors:** Green `#22c55e`, Amber `#f59e0b`, Red `#ef4444`
-- **Cards:** `.glass-card` with `backdrop-filter: blur(16px)`, subtle box shadows
-- **Animations:** `layerActivate` flash, `cascadePulse`, `aiEntryFlash`, `signal-blink`
-
----
-
-## 🧪 Testing Scenarios
-
-### Test 1: Forward Movement (Bug 1 Fix)
-1. Open Live Map → watch KAT-04 (Katraj route)
-2. Bus moves **continuously forward** along the route
-3. When trip completes, it wraps to start with `trip_number` incrementing
-4. **Expected:** No back-and-forth bouncing. Distance only increases.
-
-### Test 2: Live vs Lab Independence (Bug 3 Fix)
-1. Open **Laboratory** tab → drag Signal to 0%
-2. Lab buses enter ghost mode
-3. Switch to **Live Map** tab
-4. **Expected:** Live buses still have normal signal — completely unaffected
-
-### Test 3: Autonomous Ghost on Live Map
-1. Watch Live Map → KAT-04 enters Katraj Ghat dead zone automatically
-2. Ghost mode activates without any slider interaction
-3. Ghost confidence decays over time
-4. **Expected:** Purple ghost indicator on KAT-04, buffer filling
-
-### Test 4: Ghost Reconciliation (Bug 4 Fix)
-1. In Lab, trigger **📡 DEAD ZONE** preset
-2. Wait for ghost bus to travel forward
-3. Click **🔄 RECOVERY** preset
-4. **Expected:** Bus continues from ghost position. No backward snap.
-
-### Test 5: Dead Zone Scenario
-1. Click **📡 DEAD ZONE** preset in Lab
-2. Observe cascade: L5 (Dead Zone) → L3 (Ghost) → L2 (Buffer) → L1 (Adaptive)
-3. Layer cards expand with real-time data + AI explanations
-4. Cascade Flow SVG shows animated arrows lighting up
-
-### Test 6: Storm Scenario
-1. Click **⛈ STORM** preset in Lab
-2. All 6 layers activate simultaneously
-3. Full cascade visible in SVG diagram
-
-### Test 7: Layer AI Explanations
-1. Trigger any scenario in Lab
-2. Each layer card shows 🤖 AI Explanation section
-3. Timestamped decisions with reasoning and action
-
-### Test 8: Notifications
-1. Trigger Dead Zone preset → bell badge increments
-2. Click 🔔 → drawer opens with ghost/dead zone notifications
-3. Note: simulated events do NOT pollute Live section notifications
-
-### Test 9: 3D AI Decisions
-1. Click "Track in 3D" on any bus card
-2. AI Decisions panel appears filtered to that bus only
+- **Distance-Based Movement:** Buses use a monotonically increasing `distance_traveled_km` float with route geometry pre-computed as a cumulative distance lookup table. Position is found via binary search + linear interpolation. Distance only ever increases.
+- **Ghost Reconciliation:** On signal restoration, `distance_traveled_km = ghost_distance_km` — the bus continues from the ghost's predicted position and **never snaps backward**.
 
 ---
 
@@ -357,34 +190,10 @@ Scrollable control center with the following layout:
 | KAT-04 | Katraj → MITAOE | Crimson |
 | PUN-05 | Pimpri → MITAOE | Amber |
 
-## 📡 Dead Zones
-
-| Zone | Severity | Signal | Route |
-|------|----------|--------|-------|
-| Katraj Ghat | Blackout | 0-5% | KAT-04 stops 3-5 |
-| Nanded Outskirts | Weak | 15-30% | MIT-01 stops 4-6 |
-| Bhosari Industrial | Weak | 20-35% | PUN-05 stops 2-4 |
-| Moshi Highway | Blackout | 0-8% | HAD-03 stops 5-7 |
-
----
-
-## 📋 Phase History
-
-| Phase | Features |
-|-------|----------|
-| **1** | Single bus GPS simulation, Leaflet map |
-| **2** | Dead zones, ghost bus extrapolation, store-and-forward buffer |
-| **3** | 5-bus fleet, OSRM road geometry, multi-route tracking |
-| **4** | ML ETA prediction (GradientBoosting), confidence cones |
-| **5** | AI Decision Explainability engine, system decision logging |
-| **6** | Zekrom branding, dark/light mode, notification center, 70:30 layout |
-| **7** | Logista Slate UI overhaul, glassmorphism, AI log isolation (live vs sim) |
-| **8** | **Layer Activity Monitor** — 6-layer resilience visualization, cascade flow, per-layer AI explanations, scrollable simulation lab |
-| **9** | **Dual Architecture** — distance-based movement (no index bouncing), independent Live/Lab simulations (`/ws/live` + `/ws/lab`), autonomous signal model, forward-only ghost reconciliation, auto-setup on startup |
-
 ---
 
 ## ⚠️ Notes
+
 - All routes converge at **MITAOE (18.6828°N, 74.1190°E)**
 - Uses **CARTO Voyager** tiles and **OSRM** for road geometry
 - **Mapbox** token for 3D view must be added manually to `frontend/.env` (see Quick Start)
