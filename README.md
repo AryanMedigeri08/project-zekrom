@@ -114,6 +114,8 @@ cd project-zekrom/frontend
 
 # Create .env file with your Mapbox token (required for 3D view)
 echo "VITE_MAPBOX_TOKEN=pk.eyJ1IjoiMjAyNDAxMTIwMDIwIiwiYSI6ImNtbzQxZ2VjZTE2b3gycXF3NjJhMGEwbXcifQ.vCeSd97F_Us7ja-Tulh4ig" > .env
+OR
+echo "VITE_MAPBOX_TOKEN=pk.eyJ1IjoiMjAyNDAxMTIwMDIwIiwiYSI6ImNtbzVweWFjeDA0dmYyb3NodGNtajBtenEifQ.HJMpW5ol_TTAYmUg2Ay2Hw" > .env
 
 # Install Node dependencies
 npm install
