@@ -114,6 +114,8 @@ cd project-zekrom/frontend
 
 # Create .env file with your Mapbox token (required for 3D view)
 echo "VITE_MAPBOX_TOKEN=pk.eyJ1IjoiMjAyNDAxMTIwMDIwIiwiYSI6ImNtbzQxZ2VjZTE2b3gycXF3NjJhMGEwbXcifQ.vCeSd97F_Us7ja-Tulh4ig" > .env
+OP
+echo "VITE_MAPBOX_TOKEN=pk.eyJ1IjoiMjAyNDAxMTIwMDIwIiwiYSI6ImNtbzVweWFjeDA0dmYyb3NodGNtajBtenEifQ.HJMpW5ol_TTAYmUg2Ay2Hw" > .env
 
 # Install Node dependencies
 npm install
@@ -275,58 +277,7 @@ Scrollable control center with the following layout:
 
 ---
 
-## 🧪 Testing Scenarios
 
-### Test 1: Forward Movement (Bug 1 Fix)
-1. Open Live Map → watch KAT-04 (Katraj route)
-2. Bus moves **continuously forward** along the route
-3. When trip completes, it wraps to start with `trip_number` incrementing
-4. **Expected:** No back-and-forth bouncing. Distance only increases.
-
-### Test 2: Live vs Lab Independence (Bug 3 Fix)
-1. Open **Laboratory** tab → drag Signal to 0%
-2. Lab buses enter ghost mode
-3. Switch to **Live Map** tab
-4. **Expected:** Live buses still have normal signal — completely unaffected
-
-### Test 3: Autonomous Ghost on Live Map
-1. Watch Live Map → KAT-04 enters Katraj Ghat dead zone automatically
-2. Ghost mode activates without any slider interaction
-3. Ghost confidence decays over time
-4. **Expected:** Purple ghost indicator on KAT-04, buffer filling
-
-### Test 4: Ghost Reconciliation (Bug 4 Fix)
-1. In Lab, trigger **📡 DEAD ZONE** preset
-2. Wait for ghost bus to travel forward
-3. Click **🔄 RECOVERY** preset
-4. **Expected:** Bus continues from ghost position. No backward snap.
-
-### Test 5: Dead Zone Scenario
-1. Click **📡 DEAD ZONE** preset in Lab
-2. Observe cascade: L5 (Dead Zone) → L3 (Ghost) → L2 (Buffer) → L1 (Adaptive)
-3. Layer cards expand with real-time data + AI explanations
-4. Cascade Flow SVG shows animated arrows lighting up
-
-### Test 6: Storm Scenario
-1. Click **⛈ STORM** preset in Lab
-2. All 6 layers activate simultaneously
-3. Full cascade visible in SVG diagram
-
-### Test 7: Layer AI Explanations
-1. Trigger any scenario in Lab
-2. Each layer card shows 🤖 AI Explanation section
-3. Timestamped decisions with reasoning and action
-
-### Test 8: Notifications
-1. Trigger Dead Zone preset → bell badge increments
-2. Click 🔔 → drawer opens with ghost/dead zone notifications
-3. Note: simulated events do NOT pollute Live section notifications
-
-### Test 9: 3D AI Decisions
-1. Click "Track in 3D" on any bus card
-2. AI Decisions panel appears filtered to that bus only
-
----
 
 ## 🔌 Backend Endpoints
 
