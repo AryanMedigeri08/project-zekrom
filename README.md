@@ -32,7 +32,7 @@ project-zekrom/
     ├── tailwind.config.js
     ├── postcss.config.js
     ├── index.html
-    ├── .env                            # VITE_MAPBOX_TOKEN (included in repo)
+    ├── .env                            # VITE_MAPBOX_TOKEN (create manually, gitignored)
     └── src/
         ├── main.jsx                    # Entry — ThemeProvider + NotificationProvider
         ├── index.css                   # Logista Slate design system (light mode)
@@ -112,6 +112,9 @@ python main.py
 # Open a NEW terminal
 cd project-zekrom/frontend
 
+# Create .env file with your Mapbox token (required for 3D view)
+echo "VITE_MAPBOX_TOKEN=pk.eyJ1IjoiMjAyNDAxMTIwMDIwIiwiYSI6ImNtbzQxZ2VjZTE2b3gycXF3NjJhMGEwbXcifQ.vCeSd97F_Us7ja-Tulh4ig" > .env
+
 # Install Node dependencies
 npm install
 
@@ -119,7 +122,7 @@ npm install
 npm run dev
 ```
 
-> **Note:** The `.env` file containing the Mapbox API key is already included in the repository — no manual setup needed for the 3D view.
+> **Note:** The `.env` file is **gitignored** and must be created manually. Get a free Mapbox token from [mapbox.com/account/access-tokens](https://account.mapbox.com/access-tokens/). The 3D view will not work without it.
 
 The app opens at **http://localhost:5173**
 
@@ -382,7 +385,7 @@ Scrollable control center with the following layout:
 ## ⚠️ Notes
 - All routes converge at **MITAOE (18.6828°N, 74.1190°E)**
 - Uses **CARTO Voyager** tiles and **OSRM** for road geometry
-- **Mapbox** token for 3D view is included in the repo's `.env` file
+- **Mapbox** token for 3D view must be added manually to `frontend/.env` (see Quick Start)
 - The entire system runs locally — no paid APIs required
 - ML model and training data are **auto-generated** on first `python main.py` run
 - Always activate the **virtual environment** (`venv\Scripts\activate`) before running
