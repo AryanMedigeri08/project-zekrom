@@ -124,6 +124,8 @@ npm run dev
 
 > **Note:** The `.env` file is **gitignored** and must be created manually. Get a free Mapbox token from [mapbox.com/account/access-tokens](https://account.mapbox.com/access-tokens/). The 3D view will not work without it.
 
+> **⚠️ Important:** The `.env` file **must be saved in UTF-8 encoding**. If it is saved in a different encoding (e.g., UTF-16), the Mapbox token will not be read correctly and the **3D map will fail to load**. In VS Code, check the encoding in the bottom-right status bar and click it to change to `UTF-8` if needed.
+
 The app opens at **http://localhost:5173**
 
 ---
